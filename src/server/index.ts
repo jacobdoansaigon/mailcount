@@ -1,4 +1,8 @@
 import "dotenv/config";
+import { preferIpv4DnsOrder } from "../lib/dns-prefer-ipv4.js";
+
+preferIpv4DnsOrder();
+
 import cors from "cors";
 import express from "express";
 import multer from "multer";
@@ -16,6 +20,8 @@ import {
   refreshEnvFromDisk,
   reloadEnvFromFileAfterSave,
 } from "../config.js";
+import { connectMongoDb, isMongoMultiUser } from "../db/mongo.js";
+import { registerMongoMultiuserApi } from "./mongo-multiuser-api.js";
 import { collectAttachmentPaths, loadRecipientsCsv } from "../lib/csv-recipients.js";
 import { upsertManualSavedRecipient } from "../lib/saved-recipients-csv.js";
 import { buildDashboardPayload } from "../lib/dashboard-stats.js";
@@ -93,6 +99,15 @@ async function bootstrap(): Promise<void> {
   });
 
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+  if (isMongoMultiUser()) {
+    await connectMongoDb();
+    registerMongoMultiuserApi(app, upload);
+  } else {
+  /** Cho SPA biết có bật đăng nhập magic link + Mongo hay không */
+  app.get("/api/auth/config", (_req, res) => {
+    res.json({ ok: true, multiUser: false });
+  });
 
   /** Tài khoản đơn giản: chỉ email + mật khẩu; máy chủ mail theo preset Microsoft 365 trong code */
   app.get("/api/account", async (_req, res) => {
@@ -259,25 +274,46 @@ async function bootstrap(): Promise<void> {
   });
 
   /** Thông tin file danh sách đã lưu cố định */
-  app.get("/api/recipients/saved", async (_req, res) => {
+  app.get("/api/recipients/saved", async (req, res) => {
     try {
+      const page = Math.max(1, parseInt(String(req.query["page"] ?? "1"), 10) || 1);
+      const limit = Math.min(
+        100,
+        Math.max(1, parseInt(String(req.query["limit"] ?? "20"), 10) || 20),
+      );
+      const skip = (page - 1) * limit;
       if (!(await pathExists(RECIPIENTS_SAVED_PATH))) {
         res.json({
           ok: true,
           exists: false,
           path: RECIPIENTS_SAVED_PATH,
+          total: 0,
+          page,
+          pageSize: limit,
           rowCount: 0,
-          sampleEmails: [],
+          rows: [],
         });
         return;
       }
       const rows = loadRecipientsCsv(RECIPIENTS_SAVED_PATH);
+      const total = rows.length;
+      const pageRows = rows.slice(skip, skip + limit);
+      const mapped = pageRows.map((r) => ({
+        email: r.email,
+        name: r.name ?? "",
+        greeting: r.greeting ?? "",
+        title: r.title ?? "",
+        surveyCode: r.surveyCode ?? "",
+      }));
       res.json({
         ok: true,
-        exists: true,
+        exists: total > 0,
         path: RECIPIENTS_SAVED_PATH,
-        rowCount: rows.length,
-        sampleEmails: rows.slice(0, 8).map((r) => r.email),
+        total,
+        page,
+        pageSize: limit,
+        rowCount: total,
+        rows: mapped,
       });
     } catch (e) {
       res.status(500).json({
@@ -294,6 +330,7 @@ async function bootstrap(): Promise<void> {
       const email = nz(b.email);
       const name = nz(b.name);
       const greeting = nz(b.greeting);
+      const title = nz(b.title);
       if (!email) {
         res.status(400).json({ ok: false, error: "Vui lòng nhập email." });
         return;
@@ -302,6 +339,7 @@ async function bootstrap(): Promise<void> {
         email,
         name: name || undefined,
         greeting: greeting || undefined,
+        title: title || undefined,
       });
       res.json({
         ok: true,
@@ -649,6 +687,7 @@ async function bootstrap(): Promise<void> {
       }
     },
   );
+  }
 
   if (
     process.env["NODE_ENV"] === "production" &&

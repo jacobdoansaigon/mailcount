@@ -15,6 +15,8 @@ export type SendMailInput = {
   toName?: string;
   /** Xưng hô cá nhân (vd từ CSV): "Anh Minh", "Chị Lan" — dùng trong mẫu {{greeting}} / {{greetingOrName}} */
   greeting?: string;
+  /** Chức vụ — {{title}} */
+  title?: string;
   subjectTemplate: string;
   textBody: string;
   htmlBody?: string;
@@ -54,6 +56,7 @@ export type MailTemplateContext = {
   name?: string;
   email: string;
   greeting?: string;
+  title?: string;
 };
 
 /** Thay placeholder trong tiêu đề / nội dung text / HTML. */
@@ -64,12 +67,14 @@ export function renderMailTemplate(
   const name = (ctx.name ?? "").trim();
   const greeting = (ctx.greeting ?? "").trim();
   const greetingOrName = greeting || name;
+  const title = (ctx.title ?? "").trim();
   return template
     .replaceAll("{{greetingOrName}}", greetingOrName)
     .replaceAll("{{greeting}}", greeting)
     .replaceAll("{{code}}", ctx.surveyCode)
     .replaceAll("{{name}}", name)
-    .replaceAll("{{email}}", ctx.email);
+    .replaceAll("{{email}}", ctx.email)
+    .replaceAll("{{title}}", title);
 }
 
 export function renderSubject(
@@ -87,6 +92,7 @@ export async function sendOneMail(opts: SendMailInput): Promise<OutboundRecord> 
     name: opts.toName,
     email: opts.to,
     greeting: opts.greeting,
+    title: opts.title,
   };
   let subject = renderMailTemplate(opts.subjectTemplate, tplCtx);
   if (!/\[CODE:/i.test(subject)) {
@@ -104,48 +110,78 @@ export async function sendOneMail(opts: SendMailInput): Promise<OutboundRecord> 
     contentType: mimeFor(p),
   }));
 
-  const displayName =
-    (opts.toName?.trim() || opts.greeting?.trim()) ?? undefined;
-
+  /** Microsoft 365: From/To dạng địa chỉ thuần — tránh 550/5.7.x do header display name lạ. */
   const transporter = nodemailer.createTransport({
     host: opts.smtpHost,
     port: opts.smtpPort,
     secure: opts.smtpSecure,
-    connectionTimeout: 25_000,
-    greetingTimeout: 25_000,
-    socketTimeout: 120_000,
+    requireTLS: !opts.smtpSecure && opts.smtpPort === 587,
+    connectionTimeout: 20_000,
+    greetingTimeout: 20_000,
+    socketTimeout: 55_000,
     auth: {
       user: opts.smtpUser,
       pass: opts.smtpPass,
     },
+    tls: {
+      minVersion: "TLSv1.2" as const,
+      servername: opts.smtpHost,
+    },
   });
 
-  const info = await transporter.sendMail({
-    envelope: {
-      from: opts.smtpUser,
-      to: opts.to,
-    },
-    from: displayName
-      ? `"${displayName.replace(/"/g, "")}" <${opts.smtpUser}>`
-      : opts.smtpUser,
-    to: displayName
-      ? `"${displayName.replace(/"/g, "")}" <${opts.to}>`
-      : opts.to,
-    subject,
-    text: textBody,
-    html: htmlBody,
-    messageId,
-    headers: {
-      "X-Survey-Code": opts.surveyCode,
-    },
-    attachments,
+  const parsedDeadline = Number(process.env["SMTP_SEND_DEADLINE_MS"]);
+  const sendDeadlineMs = Math.max(
+    45_000,
+    Number.isFinite(parsedDeadline) && parsedDeadline > 0
+      ? parsedDeadline
+      : 75_000,
+  );
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, rej) => {
+    deadlineTimer = setTimeout(
+      () =>
+        rej(
+          new Error(
+            `Gửi SMTP quá ${Math.round(sendDeadlineMs / 1000)}s — kiểm tra email/mật khẩu Microsoft trong Hồ sơ, app password, hoặc chính sách tenant (SMTP từ cloud thường bị chặn).`,
+          ),
+        ),
+      sendDeadlineMs,
+    );
   });
+
+  let info: Awaited<ReturnType<typeof transporter.sendMail>>;
+  try {
+    info = await Promise.race([
+      transporter.sendMail({
+        envelope: {
+          from: opts.smtpUser,
+          to: opts.to,
+        },
+        from: opts.smtpUser,
+        to: opts.to,
+        subject,
+        text: textBody,
+        html: htmlBody,
+        messageId,
+        headers: {
+          "X-Survey-Code": opts.surveyCode,
+        },
+        attachments,
+      }),
+      deadline,
+    ]);
+  } finally {
+    if (deadlineTimer) clearTimeout(deadlineTimer);
+    transporter.close();
+  }
 
   const actualMid =
     typeof info.messageId === "string" && info.messageId.trim()
       ? info.messageId.trim()
       : messageId;
 
+  const displayName =
+    (opts.toName?.trim() || opts.greeting?.trim()) ?? undefined;
   const record: OutboundRecord = {
     recipientEmail: opts.to,
     recipientName: opts.toName ?? displayName,
