@@ -117,35 +117,66 @@ export async function sendOneMail(opts: SendMailInput): Promise<OutboundRecord> 
     host: opts.smtpHost,
     port: opts.smtpPort,
     secure: opts.smtpSecure,
-    connectionTimeout: 25_000,
-    greetingTimeout: 25_000,
-    socketTimeout: 120_000,
+    requireTLS: !opts.smtpSecure && opts.smtpPort === 587,
+    connectionTimeout: 20_000,
+    greetingTimeout: 20_000,
+    socketTimeout: 55_000,
     auth: {
       user: opts.smtpUser,
       pass: opts.smtpPass,
     },
+    tls: { minVersion: "TLSv1.2" as const },
   });
 
-  const info = await transporter.sendMail({
-    envelope: {
-      from: opts.smtpUser,
-      to: opts.to,
-    },
-    from: displayName
-      ? `"${displayName.replace(/"/g, "")}" <${opts.smtpUser}>`
-      : opts.smtpUser,
-    to: displayName
-      ? `"${displayName.replace(/"/g, "")}" <${opts.to}>`
-      : opts.to,
-    subject,
-    text: textBody,
-    html: htmlBody,
-    messageId,
-    headers: {
-      "X-Survey-Code": opts.surveyCode,
-    },
-    attachments,
+  const parsedDeadline = Number(process.env["SMTP_SEND_DEADLINE_MS"]);
+  const sendDeadlineMs = Math.max(
+    45_000,
+    Number.isFinite(parsedDeadline) && parsedDeadline > 0
+      ? parsedDeadline
+      : 75_000,
+  );
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, rej) => {
+    deadlineTimer = setTimeout(
+      () =>
+        rej(
+          new Error(
+            `Gửi SMTP quá ${Math.round(sendDeadlineMs / 1000)}s — kiểm tra email/mật khẩu Microsoft trong Hồ sơ, app password, hoặc chính sách tenant (SMTP từ cloud thường bị chặn).`,
+          ),
+        ),
+      sendDeadlineMs,
+    );
   });
+
+  let info: Awaited<ReturnType<typeof transporter.sendMail>>;
+  try {
+    info = await Promise.race([
+      transporter.sendMail({
+        envelope: {
+          from: opts.smtpUser,
+          to: opts.to,
+        },
+        from: displayName
+          ? `"${displayName.replace(/"/g, "")}" <${opts.smtpUser}>`
+          : opts.smtpUser,
+        to: displayName
+          ? `"${displayName.replace(/"/g, "")}" <${opts.to}>`
+          : opts.to,
+        subject,
+        text: textBody,
+        html: htmlBody,
+        messageId,
+        headers: {
+          "X-Survey-Code": opts.surveyCode,
+        },
+        attachments,
+      }),
+      deadline,
+    ]);
+  } finally {
+    if (deadlineTimer) clearTimeout(deadlineTimer);
+    transporter.close();
+  }
 
   const actualMid =
     typeof info.messageId === "string" && info.messageId.trim()

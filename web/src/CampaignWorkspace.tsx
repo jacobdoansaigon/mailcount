@@ -461,13 +461,14 @@ export function CampaignWorkspace(props: {
 
         <form onSubmit={(e) => void onSend(e)} className="mt-4 space-y-3 border-t border-stroke/50 pt-4">
           <input type="hidden" name="useSavedRecipients" value="1" />
-          <label className="flex items-center gap-2 text-[11px] text-muted">
-            <span>Giới hạn N người (trống = tất cả)</span>
+          <label className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+            <span>Giới hạn số người (để trống = tất cả)</span>
             <input
               value={limit}
               onChange={(e) => setLimit(e.target.value)}
-              placeholder="N"
-              className="w-16 rounded-lg border border-stroke bg-ink-950/60 px-2 py-1 text-ink-900"
+              inputMode="numeric"
+              placeholder="vd 50"
+              className="w-20 rounded-lg border border-stroke bg-ink-950/60 px-2 py-1 text-ink-900"
             />
           </label>
           <label className="block text-[11px] text-muted">

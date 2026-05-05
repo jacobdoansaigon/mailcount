@@ -810,9 +810,26 @@ export function registerMongoMultiuserApi(
         let limitRaw: number | undefined;
         const lim = (req.body as { limit?: string | number }).limit;
         if (typeof lim === "string" && lim.trim().length > 0) {
-          const n = parseInt(lim, 10);
-          if (!Number.isNaN(n) && n >= 0) limitRaw = n;
-        } else if (typeof lim === "number") limitRaw = lim;
+          const n = parseInt(lim.trim(), 10);
+          if (Number.isNaN(n) || n < 0) {
+            res.status(400).json({
+              ok: false,
+              error:
+                "«Giới hạn» phải là số nguyên ≥ 0 (vd 10), hoặc để trống để gửi tất cả — không nhập chữ.",
+            });
+            return;
+          }
+          limitRaw = n;
+        } else if (typeof lim === "number") {
+          if (!Number.isFinite(lim) || lim < 0) {
+            res.status(400).json({
+              ok: false,
+              error: "«Giới hạn» không hợp lệ.",
+            });
+            return;
+          }
+          limitRaw = lim;
+        }
 
         const result = await runSendCampaign({
           csvPath: csvPathResolved,
