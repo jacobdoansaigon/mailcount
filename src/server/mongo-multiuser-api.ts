@@ -22,10 +22,11 @@ import { readOutboundLog, readJsonlLines } from "../lib/outbound-log.js";
 import { buildReportRows, generateReportCsv } from "../lib/report.js";
 import { runSendCampaign } from "../lib/run-campaign.js";
 import type { ReplyRecord } from "../lib/types.js";
-import { encryptSecret } from "../lib/secret-crypto.js";
+import { decryptSecret, encryptSecret } from "../lib/secret-crypto.js";
 import { RecipientModel } from "../models/Recipient.js";
 import { UserModel } from "../models/User.js";
 import { PRESET_MICROSOFT_365 } from "../lib/mail-presets.js";
+import { verifyMicrosoft365Smtp } from "../lib/ms365-smtp-verify.js";
 import {
   getUserMailConfig,
   userWorkspacePaths,
@@ -212,7 +213,7 @@ export function registerMongoMultiuserApi(
     try {
       const uid = (req as AuthedRequest).userId;
       const b = req.body as Record<string, unknown>;
-      const workEmail = nz(b.email);
+      const workEmail = nz(b.email).toLowerCase();
       const password =
         typeof b.password === "string" ? b.password.trim() : nz(b.password);
       if (!workEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(workEmail)) {
@@ -233,6 +234,32 @@ export function registerMongoMultiuserApi(
         return;
       }
       const secret = getJwtSecret();
+      let passPlain: string;
+      try {
+        passPlain =
+          password.length > 0
+            ? password
+            : decryptSecret(existingEnc, secret);
+      } catch {
+        res.status(400).json({
+          ok: false,
+          error:
+            "Không đọc được mật khẩu mailbox đã lưu — nhập lại mật khẩu hoặc mã ứng dụng Microsoft.",
+        });
+        return;
+      }
+      try {
+        await verifyMicrosoft365Smtp({
+          mailboxEmail: workEmail,
+          mailboxPassword: passPlain,
+        });
+      } catch (ve) {
+        res.status(400).json({
+          ok: false,
+          error: String(ve instanceof Error ? ve.message : ve),
+        });
+        return;
+      }
       const passEnc =
         password.length > 0 ? encryptSecret(password, secret) : existingEnc;
       user.mailbox = user.mailbox ?? {};
@@ -494,7 +521,7 @@ export function registerMongoMultiuserApi(
     try {
       const uid = (req as AuthedRequest).userId;
       const b = req.body as Record<string, unknown>;
-      const email = nz(b.email);
+      const email = nz(b.email).toLowerCase();
       const password =
         typeof b.password === "string" ? b.password.trim() : nz(b.password);
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -515,6 +542,32 @@ export function registerMongoMultiuserApi(
         return;
       }
       const secret = getJwtSecret();
+      let passPlain: string;
+      try {
+        passPlain =
+          password.length > 0
+            ? password
+            : decryptSecret(existingEnc, secret);
+      } catch {
+        res.status(400).json({
+          ok: false,
+          error:
+            "Không đọc được mật khẩu mailbox đã lưu — nhập lại mật khẩu hoặc mã ứng dụng Microsoft.",
+        });
+        return;
+      }
+      try {
+        await verifyMicrosoft365Smtp({
+          mailboxEmail: email,
+          mailboxPassword: passPlain,
+        });
+      } catch (ve) {
+        res.status(400).json({
+          ok: false,
+          error: String(ve instanceof Error ? ve.message : ve),
+        });
+        return;
+      }
       const passEnc =
         password.length > 0 ? encryptSecret(password, secret) : existingEnc;
       user.mailbox = user.mailbox ?? {};

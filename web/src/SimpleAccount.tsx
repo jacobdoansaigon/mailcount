@@ -45,7 +45,10 @@ export function SimpleAccount(props: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
       });
-      showToast("Đã lưu. Giờ anh chị có thể gửi khảo sát và lấy phản hồi.", "ok");
+      showToast(
+        "Đã lưu và xác thực SMTP với Microsoft 365 — có thể gửi khảo sát và Poll.",
+        "ok",
+      );
       setPassword("");
       await load();
       void onSaved();
