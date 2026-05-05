@@ -123,7 +123,10 @@ export async function sendOneMail(opts: SendMailInput): Promise<OutboundRecord> 
       user: opts.smtpUser,
       pass: opts.smtpPass,
     },
-    tls: { minVersion: "TLSv1.2" as const },
+    tls: {
+      minVersion: "TLSv1.2" as const,
+      servername: opts.smtpHost,
+    },
   });
 
   const parsedDeadline = Number(process.env["SMTP_SEND_DEADLINE_MS"]);

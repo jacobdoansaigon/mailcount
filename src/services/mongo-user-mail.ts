@@ -3,7 +3,11 @@ import path from "node:path";
 import { getJwtSecret } from "../auth/session-jwt.js";
 import type { MailConfig } from "../config.js";
 import { decryptSecret } from "../lib/secret-crypto.js";
-import { PRESET_MICROSOFT_365 } from "../lib/mail-presets.js";
+import {
+  PRESET_MICROSOFT_365,
+  resolveMicrosoft365ImapHost,
+  resolveMicrosoft365SmtpHost,
+} from "../lib/mail-presets.js";
 import { UserModel } from "../models/User.js";
 
 export function userWorkspacePaths(userId: string) {
@@ -37,13 +41,11 @@ export async function getUserMailConfig(userId: string): Promise<MailConfig> {
   await fs.mkdir(p.repliesDir, { recursive: true });
   await fs.mkdir(path.dirname(p.outboundLogPath), { recursive: true });
 
-  const smtpHost =
-    u.mailbox.smtpHost?.trim() || PRESET_MICROSOFT_365.smtpHost;
+  const smtpHost = resolveMicrosoft365SmtpHost(u.mailbox.smtpHost);
   const smtpPort = u.mailbox.smtpPort || PRESET_MICROSOFT_365.smtpPort;
   const smtpSecure =
     u.mailbox.smtpSecure ?? PRESET_MICROSOFT_365.smtpSecure;
-  const imapHost =
-    u.mailbox.imapHost?.trim() || PRESET_MICROSOFT_365.imapHost;
+  const imapHost = resolveMicrosoft365ImapHost(u.mailbox.imapHost);
   const imapPort = u.mailbox.imapPort || PRESET_MICROSOFT_365.imapPort;
   const imapTls = u.mailbox.imapTls ?? PRESET_MICROSOFT_365.imapTls;
   const delay = Number.isFinite(u.sendDelayMs) ? u.sendDelayMs! : 3500;

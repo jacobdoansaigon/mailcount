@@ -1,4 +1,8 @@
 import "dotenv/config";
+import { preferIpv4DnsOrder } from "../lib/dns-prefer-ipv4.js";
+
+preferIpv4DnsOrder();
+
 import cors from "cors";
 import express from "express";
 import multer from "multer";

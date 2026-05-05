@@ -1,5 +1,8 @@
 import nodemailer from "nodemailer";
-import { PRESET_MICROSOFT_365 } from "./mail-presets.js";
+import {
+  PRESET_MICROSOFT_365,
+  resolveMicrosoft365SmtpHost,
+} from "./mail-presets.js";
 
 const VERIFY_DEADLINE_MS = 40_000;
 
@@ -18,8 +21,9 @@ export async function verifyMicrosoft365Smtp(params: {
   }
 
   const p = PRESET_MICROSOFT_365;
+  const host = resolveMicrosoft365SmtpHost(null);
   const transporter = nodemailer.createTransport({
-    host: p.smtpHost,
+    host,
     port: p.smtpPort,
     secure: p.smtpSecure,
     requireTLS: !p.smtpSecure && p.smtpPort === 587,
@@ -27,7 +31,10 @@ export async function verifyMicrosoft365Smtp(params: {
     greetingTimeout: 20_000,
     socketTimeout: 35_000,
     auth: { user, pass },
-    tls: { minVersion: "TLSv1.2" as const },
+    tls: {
+      minVersion: "TLSv1.2" as const,
+      servername: host,
+    },
   });
 
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -36,7 +43,7 @@ export async function verifyMicrosoft365Smtp(params: {
       () =>
         rej(
           new Error(
-            "TIMEOUT: Không nhận phản hồi từ smtp.office365.com trong 40 giây (mạng / firewall / IP bị chặn).",
+            `TIMEOUT: Không nhận phản hồi từ ${host} trong 40 giây (mạng / firewall / IPv6).`,
           ),
         ),
       VERIFY_DEADLINE_MS,
@@ -102,7 +109,11 @@ export function formatMicrosoftSmtpError(raw: string): string {
     low.includes("timeout") ||
     low.includes("getaddrinfo")
   ) {
-    return `${tag}Không kết nối được tới Microsoft (${raw.slice(0, 220)})`;
+    return (
+      `${tag}Không kết nối được tới máy chủ SMTP (${raw.slice(0, 200)}). ` +
+      "Thử: (1) app đã ưu tiên IPv4 khi chạy trên Railway; (2) biến MICROSOFT365_SMTP_HOST=smtp-mail.outlook.com nếu là tài khoản Outlook cá nhân; " +
+      "(3) kiểm tra firewall / DNS từ datacenter."
+    );
   }
   if (
     low.includes("550 5.7.1") ||
