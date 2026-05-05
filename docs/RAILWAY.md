@@ -11,19 +11,21 @@
 
 ### 2. Biến môi trường (Variables)
 
-Đặt **đủ SMTP** (và IMAP nếu khác mặc định). Railway inject vào process — khuyến nghị **không** dựa vào file `.env` trên host (filesystem có thể mất khi redeploy).
+**Tối thiểu:** `SMTP_USER` + `SMTP_PASS` (email công việc Microsoft 365 + mật khẩu / mã ứng dụng). Trong code đã **mặc định sẵn** máy chủ Microsoft 365 (SMTP/IMAP); chỉ cần ghi đè nếu dùng nhà cung cấp khác.
 
 | Biến | Ý |
 |------|---|
-| `SMTP_HOST` | VD `smtp.office365.com` |
-| `SMTP_PORT` | `587` |
-| `SMTP_SECURE` | `false` |
-| `SMTP_USER` | Email |
-| `SMTP_PASS` | App password |
-| `IMAP_HOST` | VD `outlook.office365.com` |
-| `IMAP_PORT` | `993` |
-| `IMAP_TLS` | `true` |
-| `SEND_DELAY_MS` | VD `3500` (tuỳ chọn) |
+| `SMTP_USER` | **Bắt buộc** trên Railway — email |
+| `SMTP_PASS` | **Bắt buộc** — mật khẩu hoặc app password |
+| `SMTP_HOST` | Tuỳ chọn — mặc định `smtp.office365.com` |
+| `SMTP_PORT` | Tuỳ chọn — `587` |
+| `SMTP_SECURE` | Tuỳ chọn — `false` |
+| `IMAP_HOST` | Tuỳ chọn — `outlook.office365.com` |
+| `IMAP_PORT` | Tuỳ chọn — `993` |
+| `IMAP_TLS` | Tuỳ chọn — `true` |
+| `SEND_DELAY_MS` | Tuỳ chọn — `3500` |
+
+Railway inject vào process — khuyến nghị **không** phụ thuộc file `.env` trên host (có thể mất khi redeploy). Giao diện web «chỉ email + mật khẩu» ghi file `.env` **trên máy local**; trên PaaS anh dùng Variables như trên.
 
 `PORT` Railway tự gán — **đừng** đặt trùng tay.
 

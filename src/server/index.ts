@@ -16,7 +16,12 @@ import {
   refreshEnvFromDisk,
 } from "../config.js";
 import { collectAttachmentPaths, loadRecipientsCsv } from "../lib/csv-recipients.js";
+import { buildDashboardPayload } from "../lib/dashboard-stats.js";
 import { readEnvFile, mergeIntoEnvFile } from "../lib/env-file.js";
+import {
+  PRESET_MICROSOFT_365,
+  buildMicrosoft365EnvForAccount,
+} from "../lib/mail-presets.js";
 import { pollRepliesToFolder } from "../lib/imap-poll.js";
 import { readOutboundLog, readJsonlLines } from "../lib/outbound-log.js";
 import { buildReportRows, generateReportCsv } from "../lib/report.js";
@@ -86,6 +91,80 @@ async function bootstrap(): Promise<void> {
   });
 
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+  /** Tài khoản đơn giản: chỉ email + mật khẩu; máy chủ mail theo preset Microsoft 365 trong code */
+  app.get("/api/account", async (_req, res) => {
+    try {
+      refreshEnvFromDisk();
+      const m = getMailPartial();
+      const configured = isMailConfigComplete();
+      res.json({
+        ok: true,
+        configured,
+        preset: PRESET_MICROSOFT_365.label,
+        presetId: PRESET_MICROSOFT_365.id,
+        tagline: PRESET_MICROSOFT_365.tagline,
+        emailMasked: m.smtpUser ? maskEmail(m.smtpUser) : "",
+        /** Chỉ máy chủ nội bộ — để form hiển thị lại email đã lưu */
+        workEmail: m.smtpUser || "",
+      });
+    } catch (e) {
+      res.status(500).json({
+        ok: false,
+        error: String(e instanceof Error ? e.message : e),
+      });
+    }
+  });
+
+  app.post("/api/account", async (req, res) => {
+    try {
+      const b = req.body as Record<string, unknown>;
+      const email = nz(b.email);
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        res.status(400).json({
+          ok: false,
+          error: "Vui lòng nhập email công việc hợp lệ (dạng ten@congty.com).",
+        });
+        return;
+      }
+      const password =
+        typeof b.password === "string" ? b.password.trim() : nz(b.password);
+      const disk = await readEnvFile(ENV_FILE_PATH);
+      const existingPass = (disk.SMTP_PASS ?? "").trim();
+      if (!password.length && !existingPass.length) {
+        res.status(400).json({
+          ok: false,
+          error:
+            "Nhập mật khẩu hoặc mã ứng dụng Microsoft (lần đầu bắt buộc). Để trống lần sau nếu chỉ đổi email.",
+        });
+        return;
+      }
+      const delayRaw = parseInt(String(disk.SEND_DELAY_MS ?? ""), 10);
+      const sendDelayMs =
+        Number.isFinite(delayRaw) && delayRaw >= 0
+          ? delayRaw
+          : PRESET_MICROSOFT_365.defaultSendDelayMs;
+
+      const updates = buildMicrosoft365EnvForAccount(
+        email,
+        password.length > 0 ? password : undefined,
+        { sendDelayMs },
+      );
+      await mergeIntoEnvFile(ENV_FILE_PATH, updates);
+      refreshEnvFromDisk();
+      res.json({
+        ok: true,
+        configured: isMailConfigComplete(),
+        preset: PRESET_MICROSOFT_365.label,
+        emailMasked: maskEmail(email),
+      });
+    } catch (e) {
+      res.status(500).json({
+        ok: false,
+        error: String(e instanceof Error ? e.message : e),
+      });
+    }
+  });
 
   /** Trạng thái SMTP/IMAP để hiển thị form setup (đọc từ .env hoặc mặc định) */
   app.get("/api/setup", async (_req, res) => {
@@ -327,6 +406,23 @@ async function bootstrap(): Promise<void> {
           pending,
         },
       });
+    } catch (e) {
+      res.status(500).json({
+        ok: false,
+        error: String(e instanceof Error ? e.message : e),
+      });
+    }
+  });
+
+  app.get("/api/dashboard", async (_req, res) => {
+    try {
+      const paths = getStoragePaths();
+      const outbound = await readOutboundLog(paths.outboundLogPath);
+      const replies = await readJsonlLines<ReplyRecord>(
+        paths.repliesIndexPath,
+      );
+      const dash = buildDashboardPayload(outbound, replies);
+      res.json({ ok: true, ...dash });
     } catch (e) {
       res.status(500).json({
         ok: false,

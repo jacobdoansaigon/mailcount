@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AccountSetup, SavedRecipientsBlock } from "./SetupSection";
+import { DashboardTab } from "./DashboardTab";
+import { SavedRecipientsBlock } from "./SetupSection";
+import { SimpleAccount } from "./SimpleAccount";
 
 type ApiStatus = {
   configured?: boolean;
@@ -56,20 +58,21 @@ function Toast({
       : "border-red-400/35 bg-red-950/55 text-red-300";
   return (
     <div
-      className={`fixed bottom-6 right-6 z-50 max-w-lg rounded-xl border px-4 py-3 text-sm shadow-soft ${cls}`}
+      className={`fixed bottom-6 right-6 z-50 max-w-lg rounded-2xl border px-5 py-3.5 text-sm shadow-2xl ${cls}`}
     >
       {msg}
     </div>
   );
 }
 
+type TabId = "campaign" | "dashboard";
+
 export function App() {
+  const [tab, setTab] = useState<TabId>("campaign");
   const [status, setStatus] = useState<ApiStatus | null>(null);
   const [outbound, setOutbound] = useState<OutboundRow[]>([]);
   const [replies, setReplies] = useState<ReplyRow[]>([]);
-  const [pending, setPending] = useState(0);
-  const [replied, setReplied] = useState(0);
-  const [sent, setSent] = useState(0);
+  const [dashRefresh, setDashRefresh] = useState(0);
 
   const [qOut, setQOut] = useState("");
   const [qRep, setQRep] = useState("");
@@ -77,16 +80,15 @@ export function App() {
   const [toast, setToast] = useState<{ msg: string; kind: "ok" | "err" } | null>(
     null,
   );
+  const [showMore, setShowMore] = useState(false);
 
   const [subject, setSubject] = useState("Khảo sát hợp tác [{{code}}]");
   const [body, setBody] = useState(
     "Chào {{greetingOrName}},\n\nVui lòng trả lời trực tiếp email này (có đính kèm nếu cần).\n\nTrân trọng,",
   );
-  const [dryRun, setDryRun] = useState(false);
-  const [limit, setLimit] = useState("3");
+  const [limit, setLimit] = useState("");
   const [pollSince, setPollSince] = useState("");
-  const [delayUi, setDelayUi] = useState("");
-  const [useSavedRecipients, setUseSavedRecipients] = useState(false);
+  const [useSavedRecipients, setUseSavedRecipients] = useState(true);
 
   const showToast = useCallback((msg: string, kind: "ok" | "err") => {
     setToast({ msg, kind });
@@ -95,7 +97,7 @@ export function App() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [s, o, rp, summ] = await Promise.all([
+      const [s, o, rp] = await Promise.all([
         fetchJson<
           {
             configured?: boolean;
@@ -104,14 +106,6 @@ export function App() {
         >("/api/status"),
         fetchJson<{ rows: OutboundRow[] }>("/api/outbound"),
         fetchJson<{ rows: ReplyRow[] }>("/api/replies"),
-        fetchJson<{
-          ok: boolean;
-          totals: {
-            sent: number;
-            repliesMatchedOnCampaign: number;
-            pending: number;
-          };
-        }>("/api/summary"),
       ]);
       const st = {
         configured: s.configured ?? false,
@@ -125,11 +119,7 @@ export function App() {
       setStatus(st);
       setOutbound(o.rows ?? []);
       setReplies(rp.rows ?? []);
-      if (summ.totals) {
-        setSent(summ.totals.sent);
-        setReplied(summ.totals.repliesMatchedOnCampaign);
-        setPending(summ.totals.pending);
-      }
+      setDashRefresh((k) => k + 1);
     } catch (e) {
       showToast(String(e instanceof Error ? e.message : e), "err");
     }
@@ -171,7 +161,7 @@ export function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(bodyJson),
       });
-      showToast(`Đã đọc ${r.newMessagesImported} mail mới từ Inbox.`, "ok");
+      showToast(`Đã nhận ${r.newMessagesImported} thư mới từ hộp thư.`, "ok");
       await loadAll();
     } catch (e) {
       showToast(String(e instanceof Error ? e.message : e), "err");
@@ -190,21 +180,15 @@ export function App() {
     const fd = new FormData(form);
     fd.set("subjectTemplate", subject);
     fd.set("bodyText", body);
-    fd.set("dryRun", dryRun ? "1" : "");
+    fd.set("dryRun", "");
     fd.set("useSavedRecipients", useSavedRecipients ? "1" : "");
     fd.set("limit", limit.trim());
-    if (delayUi.trim()) fd.set("delayMs", delayUi.trim());
     setBusy(true);
     try {
       const r = await fetch("/api/send", { method: "POST", body: fd });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? r.statusText);
-      if (dryRun) {
-        const n = (data.preview as { email: string }[] | undefined)?.length ?? 0;
-        showToast(`Dry-run: ${n} người, đính kèm gộp ${data.attachmentCountCombined ?? 0} file.`, "ok");
-      } else {
-        showToast(`Đã gửi ${data.recipientCount ?? 0} mail.`, "ok");
-      }
+      showToast(`Đã gửi ${data.recipientCount ?? 0} email.`, "ok");
       await loadAll();
     } catch (e) {
       showToast(String(e instanceof Error ? e.message : e), "err");
@@ -213,366 +197,307 @@ export function App() {
     }
   };
 
+  const ready = Boolean(status?.configured);
+
   return (
-    <div className="min-h-full bg-gradient-to-b from-ink-950 via-[#111823] to-ink-950">
-      <div className="mx-auto flex min-h-full max-w-7xl flex-col gap-8 px-5 py-10">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+    <div className="mesh-bg min-h-full">
+      <div className="relative mx-auto flex min-h-full max-w-6xl flex-col gap-10 px-4 py-8 sm:px-6 sm:py-12">
+        <header className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="font-display text-xs font-bold uppercase tracking-[0.35em] text-accent">
               Mail-count
             </p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl">
-              Gửi khảo sát & đối chiếu phản hồi
+            <h1 className="font-display mt-3 text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl">
+              Khảo sát qua email,
+              <span className="block bg-gradient-to-r from-accent via-teal-200 to-accent2 bg-clip-text text-transparent">
+                theo dõi phản hồi dễ như chơi game
+              </span>
             </h1>
-            <p className="mt-2 max-w-2xl text-sm text-muted">
-              Giao diện cho workflow SMTP + IMAP: gửi từng người, đọc Inbox, xuất CSV.
-              Chạy kèm <code className="rounded bg-panel px-1.5 py-0.5 text-xs">npm run dev:ui</code>
+            <p className="mt-4 text-base leading-relaxed text-muted sm:text-lg">
+              HR và đội MSA chỉ cần vài bước: kết nối mailbox công ty → tải danh sách → gửi → xem số
+              liệu. Không cần biết SMTP hay IMAP.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void loadAll()}
-              disabled={busy}
-              className="rounded-xl border border-stroke bg-panel px-4 py-2 text-sm font-medium text-ink-900 shadow-sm transition hover:border-accent/50 hover:text-accent disabled:opacity-40"
-            >
-              Làm mới dữ liệu
-            </button>
-            <button
-              type="button"
-              onClick={onExport}
-              className="rounded-xl border border-accent/40 bg-accent/16 px-4 py-2 text-sm font-semibold text-accent shadow-sm transition hover:bg-accent/24"
-            >
-              Tải report.csv
-            </button>
-          </div>
+          <nav className="flex shrink-0 gap-2 rounded-2xl border border-white/[0.08] bg-ink-950/60 p-1.5 shadow-inner backdrop-blur">
+            {(
+              [
+                ["campaign", "Gửi & thu"],
+                ["dashboard", "Số liệu"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`rounded-xl px-5 py-2.5 text-sm font-bold transition ${
+                  tab === id
+                    ? "bg-gradient-to-r from-accent/90 to-teal-400 text-ink-950 shadow-lg shadow-accent/20"
+                    : "text-muted hover:text-ink-900"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
         </header>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <AccountSetup onSaved={loadAll} showToast={showToast} />
-          <SavedRecipientsBlock onSaved={loadAll} showToast={showToast} />
-        </div>
+        {tab === "dashboard" ? (
+          <DashboardTab showToast={showToast} refreshKey={dashRefresh} />
+        ) : (
+          <>
+            <SimpleAccount onSaved={loadAll} showToast={showToast} />
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Đã gửi (log)" value={String(sent)} hint="outbound-log" />
-          <Stat label="Đã khớp phản hồi" value={String(replied)} hint="theo chiến dịch" />
-          <Stat label="Chưa phản hồi" value={String(pending)} hint="ước lượng" />
-          <Stat
-            label="Mail Inbox đã import"
-            value={String(replies.length)}
-            hint="replies-index"
-          />
-        </section>
-
-        {status?.configured === false && (
-          <div className="rounded-xl border border-amber-500/35 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
-            Chưa cấu hình đủ SMTP trong <strong>.env</strong>. Anh làm đầy mục{" "}
-            <strong>Cấu hình SMTP / IMAP</strong> phía trên rồi nhấn Lưu — sau đó mới gửi mail / poll được.
-          </div>
-        )}
-
-        {status && (
-          <section className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-stroke bg-panel/80 p-5 shadow-soft backdrop-blur">
-              <h2 className="text-sm font-semibold text-ink-900">SMTP · gửi</h2>
-              <dl className="mt-3 space-y-2 text-sm text-muted">
-                <div className="flex justify-between gap-4">
-                  <dt>Host</dt>
-                  <dd className="font-mono text-ink-900">
-                    {status.smtp.host}:{status.smtp.port}
-                  </dd>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <SavedRecipientsBlock onSaved={loadAll} showToast={showToast} />
+              {!ready && (
+                <div className="flex items-center rounded-3xl border border-amber-400/25 bg-amber-500/10 p-6 text-sm text-amber-50">
+                  Kết nối email ở bước 1 và lưu danh sách ở bước 2 — sau đó mới gửi được nhé.
                 </div>
-                <div className="flex justify-between gap-4">
-                  <dt>Tài khoản</dt>
-                  <dd className="text-ink-900">{status.smtp.userMasked}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt>Đính kèm trên đĩa</dt>
-                  <dd className="text-ink-900">{status.attachmentCountDisk} file</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt>Delay mặc định</dt>
-                  <dd className="text-ink-900">{status.sendDelayMs} ms</dd>
-                </div>
-              </dl>
-            </div>
-            <div className="rounded-2xl border border-stroke bg-panel/80 p-5 shadow-soft backdrop-blur">
-              <h2 className="text-sm font-semibold text-ink-900">IMAP · đọc phản hồi</h2>
-              <dl className="mt-3 space-y-2 text-sm text-muted">
-                <div className="flex justify-between gap-4">
-                  <dt>Host</dt>
-                  <dd className="font-mono text-ink-900">
-                    {status.imap.host}:{status.imap.port}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt>Tài khoản</dt>
-                  <dd className="text-ink-900">{status.imap.userMasked}</dd>
-                </div>
-                <div className="mt-3 rounded-lg border border-stroke/80 bg-ink-950/40 p-3 text-xs text-muted">
-                  <p className="font-medium text-ink-900">Đường dẫn</p>
-                  <p className="mt-1 break-all opacity-90">{status.paths.outboundLogPath}</p>
-                  <p className="mt-1 break-all opacity-90">{status.paths.repliesIndexPath}</p>
-                </div>
-              </dl>
-            </div>
-          </section>
-        )}
-
-        <section className="grid gap-6 lg:grid-cols-5">
-          <form
-            onSubmit={onSend}
-            className="lg:col-span-2 rounded-2xl border border-stroke bg-panel/90 p-6 shadow-soft"
-          >
-            <h2 className="text-lg font-semibold text-ink-900">Gửi chiến dịch</h2>
-            <p className="mt-1 text-xs text-muted">
-              {useSavedRecipients ? (
-                <>
-                  Đang dùng file đã lưu (mục Danh sách email); có thể thêm cột{" "}
-                  <code className="text-ink-900">greeting</code> cho mẫu{" "}
-                  <code className="text-ink-900">{"{{greetingOrName}}"}</code>. Đính kèm upload thêm
-                  vẫn gộp với <code className="text-ink-900">data/attachments</code>.
-                </>
-              ) : (
-                <>
-                  CSV cột <code className="text-ink-900">email</code> bắt buộc; cột{" "}
-                  <code className="text-ink-900">greeting</code> (vd Anh Minh, Chị Lan) để mẫu mail
-                  dùng <code className="text-ink-900">{"{{greetingOrName}}"}</code>. File upload thêm
-                  gộp với{" "}
-                  <code className="text-ink-900">data/attachments</code>.
-                </>
               )}
-            </p>
-
-            <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs text-muted">
-              <input
-                type="checkbox"
-                checked={useSavedRecipients}
-                onChange={(e) => setUseSavedRecipients(e.target.checked)}
-                className="rounded border-stroke bg-ink-950 text-accent"
-              />
-              Dùng danh sách đã lưu trên máy (data/campaign-recipients.csv)
-            </label>
-
-            <label className="mt-4 block text-xs font-medium text-muted">
-              Tiêu đề
-              <input
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-stroke bg-ink-950/50 px-3 py-2 text-sm text-ink-900 outline-none ring-0 focus:border-accent"
-              />
-            </label>
-
-            <label className="mt-3 block text-xs font-medium text-muted">
-              Nội dung (text)
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={7}
-                className="mt-1 w-full resize-y rounded-xl border border-stroke bg-ink-950/50 px-3 py-2 font-mono text-xs text-ink-900 outline-none focus:border-accent"
-              />
-              <span className="mt-1 block text-[11px] leading-relaxed text-muted">
-                Mẫu: <code className="text-ink-900">{"{{greeting}}"}</code>,{" "}
-                <code className="text-ink-900">{"{{greetingOrName}}"}</code>,{" "}
-                <code className="text-ink-900">{"{{name}}"}</code>,{" "}
-                <code className="text-ink-900">{"{{email}}"}</code>,{" "}
-                <code className="text-ink-900">{"{{code}}"}</code> — áp dụng cả tiêu đề và nội dung.
-              </span>
-            </label>
-
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="block text-xs font-medium text-muted">
-                File CSV {!useSavedRecipients ? "(bắt buộc)" : "(bỏ qua)"}
-                <input
-                  name="csv"
-                  type="file"
-                  accept=".csv,text/csv"
-                  required={!useSavedRecipients}
-                  disabled={useSavedRecipients}
-                  className="mt-1 w-full text-xs text-ink-900 file:mr-3 file:rounded-lg file:border-0 file:bg-accent/20 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
-                />
-              </label>
-              <label className="block text-xs font-medium text-muted">
-                Đính kèm thêm (tuỳ chọn)
-                <input
-                  name="attachments"
-                  type="file"
-                  multiple
-                  className="mt-1 w-full text-xs text-ink-900 file:mr-3 file:rounded-lg file:border-0 file:bg-accent2/18 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent2"
-                />
-              </label>
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted">
-              <label className="inline-flex cursor-pointer items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={dryRun}
-                  onChange={(e) => setDryRun(e.target.checked)}
-                  className="rounded border-stroke bg-ink-950 text-accent focus:ring-accent"
-                />
-                Dry-run (không gửi)
-              </label>
-              <label className="inline-flex items-center gap-2">
-                Giới hạn
-                <input
-                  value={limit}
-                  onChange={(e) => setLimit(e.target.value)}
-                  className="w-20 rounded-lg border border-stroke bg-ink-950/50 px-2 py-1 text-ink-900"
-                />
-              </label>
-              <label className="inline-flex items-center gap-2">
-                Delay ms
-                <input
-                  value={delayUi}
-                  onChange={(e) => setDelayUi(e.target.value)}
-                  placeholder="mặc định .env"
-                  className="w-28 rounded-lg border border-stroke bg-ink-950/50 px-2 py-1 text-ink-900"
-                />
-              </label>
-            </div>
+            <section className="grid gap-8 lg:grid-cols-5">
+              <form
+                onSubmit={onSend}
+                className="lg:col-span-2 flex flex-col rounded-3xl border border-white/[0.07] bg-panel/88 p-6 shadow-soft backdrop-blur sm:p-8"
+              >
+                <h2 className="font-display text-xl font-bold text-white">Gửi khảo sát</h2>
+                <p className="mt-2 text-sm text-muted">
+                  {useSavedRecipients
+                    ? "Dùng danh sách đã lưu ở bước 2. Có thể đính kèm thêm tài liệu bên dưới."
+                    : "Chọn file CSV trong một lần gửi (cột email bắt buộc)."}
+                </p>
 
-            <button
-              type="submit"
-              disabled={busy}
-              className="mt-5 w-full rounded-xl bg-gradient-to-r from-accent to-accent2 py-2.5 text-sm font-semibold text-ink-950 shadow-soft transition hover:opacity-95 disabled:opacity-40"
-            >
-              {dryRun ? "Chạy dry-run" : "Gửi mail"}
-            </button>
-          </form>
-
-          <div className="lg:col-span-3 flex flex-col gap-4">
-            <div className="rounded-2xl border border-stroke bg-panel/90 p-5 shadow-soft">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-ink-900">Đọc Inbox (IMAP)</h2>
-                  <p className="text-xs text-muted">
-                    Nhập ngày tùy chọn (ISO), để trống dùng mặc định 7 ngày gần đây.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
+                <label className="mt-6 flex cursor-pointer items-center gap-3 text-sm text-ink-900">
                   <input
-                    value={pollSince}
-                    onChange={(e) => setPollSince(e.target.value)}
-                    placeholder="2026-05-01"
-                    className="rounded-xl border border-stroke bg-ink-950/50 px-3 py-2 text-sm text-ink-900 outline-none focus:border-accent"
+                    type="checkbox"
+                    checked={useSavedRecipients}
+                    onChange={(e) => setUseSavedRecipients(e.target.checked)}
+                    className="h-4 w-4 rounded border-stroke bg-ink-950 text-accent"
                   />
+                  Dùng danh sách đã lưu
+                </label>
+
+                <label className="mt-5 block">
+                  <span className="text-xs font-semibold text-muted">Tiêu đề email</span>
+                  <input
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-stroke/90 bg-ink-950/70 px-4 py-3 text-sm text-white outline-none focus:border-accent/50"
+                  />
+                </label>
+
+                <label className="mt-4 block">
+                  <span className="text-xs font-semibold text-muted">Nội dung</span>
+                  <textarea
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    rows={8}
+                    className="mt-2 w-full resize-y rounded-2xl border border-stroke/90 bg-ink-950/70 px-4 py-3 font-mono text-xs leading-relaxed text-white outline-none focus:border-accent/50"
+                  />
+                  <span className="mt-2 block text-[11px] text-muted/90">
+                    Có thể dùng: {"{{greetingOrName}}"}, {"{{name}}"}, {"{{email}}"}, {"{{code}}"}
+                  </span>
+                </label>
+
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label className="block text-sm text-muted">
+                    <span className="font-medium text-ink-900">
+                      File danh sách {!useSavedRecipients ? "*" : ""}
+                    </span>
+                    <input
+                      name="csv"
+                      type="file"
+                      accept=".csv,text/csv"
+                      required={!useSavedRecipients}
+                      disabled={useSavedRecipients}
+                      className="mt-2 block w-full text-xs text-ink-900 file:mr-2 file:rounded-lg file:border-0 file:bg-accent/20 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-accent"
+                    />
+                  </label>
+                  <label className="block text-sm text-muted">
+                    <span className="font-medium text-ink-900">Đính kèm (tuỳ chọn)</span>
+                    <input
+                      name="attachments"
+                      type="file"
+                      multiple
+                      className="mt-2 block w-full text-xs text-ink-900 file:mr-2 file:rounded-lg file:border-0 file:bg-accent2/20 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-accent2"
+                    />
+                  </label>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowMore((v) => !v)}
+                  className="mt-4 text-left text-xs font-semibold text-accent2 hover:underline"
+                >
+                  {showMore ? "Ẩn tuỳ chọn ▴" : "Tuỳ chọn nâng cao ▾"}
+                </button>
+
+                {showMore ? (
+                  <label className="mt-3 block text-sm text-muted">
+                    Chỉ gửi cho N người đầu (để trống = gửi cả danh sách)
+                    <input
+                      value={limit}
+                      onChange={(e) => setLimit(e.target.value)}
+                      placeholder="vd: 5"
+                      className="mt-2 w-full max-w-[120px] rounded-xl border border-stroke bg-ink-950/60 px-3 py-2 text-ink-900"
+                    />
+                  </label>
+                ) : null}
+
+                <button
+                  type="submit"
+                  disabled={busy || !ready}
+                  className="mt-8 w-full rounded-2xl bg-gradient-to-r from-accent via-teal-300 to-accent2 py-4 text-base font-black text-ink-950 shadow-xl shadow-accent/20 transition hover:brightness-110 disabled:opacity-35"
+                >
+                  {busy ? "Đang gửi…" : "Gửi email khảo sát"}
+                </button>
+              </form>
+
+              <div className="lg:col-span-3 flex flex-col gap-6">
+                <div className="rounded-3xl border border-white/[0.07] bg-panel/88 p-6 shadow-soft backdrop-blur">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h2 className="font-display text-lg font-bold text-white">Lấy phản hồi</h2>
+                      <p className="mt-1 text-sm text-muted">
+                        Đọc hộp thư — mặc định 7 ngày gần nhất. File đính kèm phản hồi được lưu tự động.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void onPoll()}
+                      disabled={busy || !ready}
+                      className="shrink-0 rounded-2xl border border-accent2/40 bg-accent2/15 px-6 py-3.5 text-sm font-bold text-accent2 transition hover:bg-accent2/25 disabled:opacity-35"
+                    >
+                      Kiểm tra hộp thư
+                    </button>
+                  </div>
+                  {showMore ? (
+                    <label className="mt-4 block text-xs text-muted">
+                      Chỉ đọc mail từ ngày (tuỳ chọn, dạng 2026-05-01)
+                      <input
+                        value={pollSince}
+                        onChange={(e) => setPollSince(e.target.value)}
+                        className="mt-2 w-full max-w-xs rounded-xl border border-stroke bg-ink-950/60 px-3 py-2 text-sm text-ink-900"
+                      />
+                    </label>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
-                    onClick={() => void onPoll()}
+                    onClick={() => void loadAll()}
                     disabled={busy}
-                    className="rounded-xl border border-accent2/40 bg-accent2/15 px-4 py-2 text-sm font-semibold text-accent2 transition hover:bg-accent2/25 disabled:opacity-40"
+                    className="rounded-2xl border border-stroke bg-ink-950/50 px-5 py-2.5 text-sm font-semibold text-ink-900 disabled:opacity-40"
                   >
-                    Poll Inbox
+                    Làm mới
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onExport}
+                    className="rounded-2xl border border-accent/35 bg-accent/12 px-5 py-2.5 text-sm font-bold text-accent"
+                  >
+                    Tải báo cáo Excel (CSV)
                   </button>
                 </div>
-              </div>
-            </div>
 
-            <div className="flex min-h-[320px] flex-1 flex-col gap-4 rounded-2xl border border-stroke bg-panel/90 p-5 shadow-soft">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="text-lg font-semibold text-ink-900">Đã gửi</h2>
-                <input
-                  value={qOut}
-                  onChange={(e) => setQOut(e.target.value)}
-                  placeholder="Lọc email / mã / tiêu đề…"
-                  className="w-full rounded-xl border border-stroke bg-ink-950/50 px-3 py-2 text-sm text-ink-900 outline-none focus:border-accent sm:max-w-xs"
-                />
-              </div>
-              <div className="soft-scroll max-h-72 overflow-auto rounded-xl border border-stroke/80">
-                <table className="min-w-full text-left text-xs">
-                  <thead className="sticky top-0 bg-ink-950/95 text-[10px] uppercase tracking-wider text-muted">
-                    <tr>
-                      <th className="px-3 py-2">Email</th>
-                      <th className="px-3 py-2">Mã</th>
-                      <th className="px-3 py-2">Gửi lúc</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stroke/60 text-ink-900">
-                    {filteredOut.slice(0, 200).map((r) => (
-                      <tr key={r.messageId} className="hover:bg-accent/9">
-                        <td className="px-3 py-2 font-mono text-[11px]">{r.recipientEmail}</td>
-                        <td className="px-3 py-2 text-accent">{r.surveyCode}</td>
-                        <td className="px-3 py-2 text-muted">{r.sentAt.slice(0, 19)}</td>
-                      </tr>
-                    ))}
-                    {filteredOut.length === 0 && (
-                      <tr>
-                        <td colSpan={3} className="px-3 py-8 text-center text-muted">
-                          Chưa có log outbound.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                <div className="rounded-3xl border border-white/[0.07] bg-panel/88 p-5 shadow-soft backdrop-blur">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h3 className="font-display font-bold text-white">Đã gửi gần đây</h3>
+                    <input
+                      value={qOut}
+                      onChange={(e) => setQOut(e.target.value)}
+                      placeholder="Tìm…"
+                      className="max-w-[200px] rounded-xl border border-stroke bg-ink-950/50 px-3 py-1.5 text-xs text-ink-900"
+                    />
+                  </div>
+                  <div className="soft-scroll max-h-64 overflow-auto rounded-xl border border-stroke/60">
+                    <table className="min-w-full text-left text-xs">
+                      <thead className="sticky top-0 bg-ink-950 text-[10px] uppercase text-muted">
+                        <tr>
+                          <th className="px-3 py-2">Email</th>
+                          <th className="px-3 py-2">Mã</th>
+                          <th className="px-3 py-2">Lúc gửi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stroke/50 text-ink-900">
+                        {filteredOut.slice(0, 120).map((r) => (
+                          <tr key={r.messageId} className="hover:bg-white/[0.03]">
+                            <td className="px-3 py-2 font-mono text-[11px]">{r.recipientEmail}</td>
+                            <td className="px-3 py-2 text-accent">{r.surveyCode}</td>
+                            <td className="px-3 py-2 text-muted">{r.sentAt.slice(0, 16)}</td>
+                          </tr>
+                        ))}
+                        {filteredOut.length === 0 && (
+                          <tr>
+                            <td colSpan={3} className="px-3 py-10 text-center text-muted">
+                              Chưa có lần gửi nào.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
 
-            <div className="flex min-h-[280px] flex-col gap-4 rounded-2xl border border-stroke bg-panel/90 p-5 shadow-soft">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="text-lg font-semibold text-ink-900">Phản hồi đã import</h2>
-                <input
-                  value={qRep}
-                  onChange={(e) => setQRep(e.target.value)}
-                  placeholder="Lọc From / CODE / chủ đề…"
-                  className="w-full rounded-xl border border-stroke bg-ink-950/50 px-3 py-2 text-sm text-ink-900 outline-none focus:border-accent2 sm:max-w-xs"
-                />
+                <div className="rounded-3xl border border-white/[0.07] bg-panel/88 p-5 shadow-soft backdrop-blur">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h3 className="font-display font-bold text-white">Phản hồi đã nhận</h3>
+                    <input
+                      value={qRep}
+                      onChange={(e) => setQRep(e.target.value)}
+                      placeholder="Tìm…"
+                      className="max-w-[200px] rounded-xl border border-stroke bg-ink-950/50 px-3 py-1.5 text-xs text-ink-900"
+                    />
+                  </div>
+                  <div className="soft-scroll max-h-56 overflow-auto rounded-xl border border-stroke/60">
+                    <table className="min-w-full text-left text-xs">
+                      <thead className="sticky top-0 bg-ink-950 text-[10px] uppercase text-muted">
+                        <tr>
+                          <th className="px-3 py-2">Người gửi</th>
+                          <th className="px-3 py-2">Cách khớp</th>
+                          <th className="px-3 py-2">Lúc nhận</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stroke/50 text-ink-900">
+                        {filteredRep
+                          .slice(-120)
+                          .reverse()
+                          .map((r, i) => (
+                            <tr
+                              key={`${r.inboundMessageId ?? r.subject}-${i}`}
+                              className="hover:bg-white/[0.03]"
+                            >
+                              <td className="px-3 py-2 font-mono text-[11px]">
+                                {r.fromAddress || "—"}
+                              </td>
+                              <td className="px-3 py-2 text-accent2">{r.correlation}</td>
+                              <td className="px-3 py-2 text-muted">{r.receivedAt.slice(0, 16)}</td>
+                            </tr>
+                          ))}
+                        {filteredRep.length === 0 && (
+                          <tr>
+                            <td colSpan={3} className="px-3 py-10 text-center text-muted">
+                              Chưa có phản hồi.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-              <div className="soft-scroll max-h-64 overflow-auto rounded-xl border border-stroke/80">
-                <table className="min-w-full text-left text-xs">
-                  <thead className="sticky top-0 bg-ink-950/95 text-[10px] uppercase tracking-wider text-muted">
-                    <tr>
-                      <th className="px-3 py-2">From</th>
-                      <th className="px-3 py-2">Khớp</th>
-                      <th className="px-3 py-2">Nhận</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stroke/60 text-ink-900">
-                    {filteredRep.slice(-200).reverse().map((r, i) => (
-                      <tr key={`${r.inboundMessageId ?? r.subject}-${i}`} className="hover:bg-accent2/9">
-                        <td className="px-3 py-2 font-mono text-[11px]">{r.fromAddress || "—"}</td>
-                        <td className="px-3 py-2 text-accent2">{r.correlation}</td>
-                        <td className="px-3 py-2 text-muted">{r.receivedAt.slice(0, 19)}</td>
-                      </tr>
-                    ))}
-                    {filteredRep.length === 0 && (
-                      <tr>
-                        <td colSpan={3} className="px-3 py-8 text-center text-muted">
-                          Chưa có phản hồi trong index.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </section>
+            </section>
+          </>
+        )}
 
-        <footer className="border-t border-stroke/60 pt-6 text-center text-[11px] text-muted">
-          Chỉ lắng nghe <code>127.0.0.1</code> — an toàn cho máy anh. Production:{" "}
-          <code className="text-ink-900">npm run build:all && NODE_ENV=production npm run start:ui</code>
+        <footer className="border-t border-white/[0.06] pt-8 text-center text-[11px] text-muted">
+          Mail-count · dữ liệu lưu trên máy chủ anh ·{" "}
+          <code className="text-muted/80">npm start</code> khi triển khai
         </footer>
       </div>
       <Toast msg={toast?.msg ?? null} kind={toast?.kind ?? "ok"} />
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-stroke bg-gradient-to-br from-panel to-ink-950/40 p-4 shadow-soft">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tabular-nums text-ink-900">{value}</p>
-      <p className="mt-1 text-[10px] text-muted/80">{hint}</p>
     </div>
   );
 }

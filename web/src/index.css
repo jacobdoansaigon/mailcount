@@ -12,6 +12,16 @@ body {
   letter-spacing: 0.01em;
 }
 
+.mesh-bg {
+  background-color: #0a0d12;
+  background-image:
+    radial-gradient(ellipse 120% 80% at 50% -30%, rgba(70, 212, 193, 0.18), transparent 55%),
+    radial-gradient(ellipse 90% 60% at 100% 20%, rgba(124, 157, 255, 0.12), transparent 50%),
+    radial-gradient(ellipse 70% 50% at 0% 80%, rgba(70, 212, 193, 0.08), transparent 45%),
+    linear-gradient(180deg, #0f1319 0%, #0a0d12 40%, #0f1319 100%);
+  background-attachment: fixed;
+}
+
 .soft-scroll {
   scrollbar-width: thin;
   scrollbar-color: #354357 transparent;

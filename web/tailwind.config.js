@@ -20,6 +20,14 @@ export default {
         accent2: "#7c9dff",
       },
       fontFamily: {
+        display: [
+          "Syne",
+          "Inter",
+          "ui-sans-serif",
+          "system-ui",
+          "-apple-system",
+          "sans-serif",
+        ],
         sans: [
           "Inter",
           "ui-sans-serif",

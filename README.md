@@ -15,23 +15,23 @@ Tổ chức phải cho phép **SMTP AUTH** / **Authenticated SMTP** và **IMAP**
 cd /Users/macos/Desktop/Tikme/Mail-count
 npm install
 cp .env.example .env
-# Sửa .env — SMTP_* bắt buộc; IMAP_* mặc định dùng cùng SMTP user/pass
+# Tuỳ chọn: CLI cần .env — trên web có thể chỉ nhập email + mật khẩu (preset M365 trong code)
 
 # Đặt file cần gửi kèm vào data/attachments/
 ```
 
-## Giao diện web (dashboard)
+## Giao diện web
 
-Chạy **API + Vite** (mở trình duyệt `http://localhost:5173` — proxy `/api` về `http://127.0.0.1:3781`):
+Chạy **API + Vite** (`http://localhost:5173` — proxy `/api` về API local):
 
 ```bash
 npm run dev:ui
 ```
 
-- Tổng quan số đã gửi / đã khớp phản hồi / chờ.
-- Trạng thái **SMTP + IMAP** (email hiển thị dạng che bớt).
-- Form **gửi chiến dịch**: upload CSV + file đính kèm (gộp với `data/attachments/`), dry-run, giới hạn người nhận, delay tùy chỉnh.
-- **Poll Inbox**, **tải report.csv**, bảng lọc outbound / phản hồi.
+- **Bước 1:** chỉ **email công việc + mật khẩu** (Microsoft 365) — máy chủ SMTP/IMAP đã cấu hình sẵn trong code.
+- **Bước 2:** tải **CSV danh sách** (cột `email`, tuỳ chọn `greeting` để xưng hô).
+- **Gửi & thu:** tiêu đề, nội dung, đính kèm, gửi mail, **kiểm tra hộp thư**, bảng đã gửi / phản hồi, tải báo cáo CSV.
+- Tab **Số liệu:** tỷ lệ phản hồi, biểu đồ 14 ngày, cách ghép mail (message-id / subject-code / …).
 
 Production (một cổng — API + asset tĩnh, trên máy anh):
 

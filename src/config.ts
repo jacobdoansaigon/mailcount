@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import fs from "node:fs";
 import path from "node:path";
+import { PRESET_MICROSOFT_365 } from "./lib/mail-presets.js";
 
 export const ENV_FILE_PATH = path.resolve(process.cwd(), ".env");
 
@@ -105,14 +106,14 @@ export function getMailConfig(): MailConfig {
 
 function partialMailFromEnv() {
   return {
-    smtpHost: opt("SMTP_HOST", "smtp.office365.com"),
-    smtpPort: num("SMTP_PORT", 587),
-    smtpSecure: bool("SMTP_SECURE", false),
+    smtpHost: opt("SMTP_HOST", PRESET_MICROSOFT_365.smtpHost),
+    smtpPort: num("SMTP_PORT", PRESET_MICROSOFT_365.smtpPort),
+    smtpSecure: bool("SMTP_SECURE", PRESET_MICROSOFT_365.smtpSecure),
     smtpUser: opt("SMTP_USER", "").trim(),
     smtpPass: opt("SMTP_PASS", "").trim(),
-    imapHost: opt("IMAP_HOST", "outlook.office365.com"),
-    imapPort: num("IMAP_PORT", 993),
-    imapTls: bool("IMAP_TLS", true),
+    imapHost: opt("IMAP_HOST", PRESET_MICROSOFT_365.imapHost),
+    imapPort: num("IMAP_PORT", PRESET_MICROSOFT_365.imapPort),
+    imapTls: bool("IMAP_TLS", PRESET_MICROSOFT_365.imapTls),
   };
 }
 
