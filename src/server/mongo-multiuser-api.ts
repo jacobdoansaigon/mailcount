@@ -26,13 +26,29 @@ import { decryptSecret, encryptSecret } from "../lib/secret-crypto.js";
 import { RecipientModel } from "../models/Recipient.js";
 import { UserModel } from "../models/User.js";
 import { PRESET_MICROSOFT_365 } from "../lib/mail-presets.js";
-import { verifyMicrosoft365Smtp } from "../lib/ms365-smtp-verify.js";
+import {
+  formatMicrosoftSmtpError,
+  verifyMicrosoft365Smtp,
+} from "../lib/ms365-smtp-verify.js";
 import {
   getUserMailConfig,
   userWorkspacePaths,
 } from "../services/mongo-user-mail.js";
 
 type AuthedRequest = Request & { userId: string; userEmail: string };
+
+/** Gửi mail / SMTP — trả lời thân thiện cho lỗi Microsoft & mạng. */
+function smtpUserFacingError(msg: string): string {
+  if (
+    /\b(535|534|550|552|554|smtp|office365|exchange|authentication|timeout|etimed|econnrefused|enotfound|getaddrinfo|tls|ssl|certificate|command failed|message refused|bad sequence)\b/i.test(
+      msg,
+    ) ||
+    msg.includes("Gửi SMTP quá")
+  ) {
+    return formatMicrosoftSmtpError(msg);
+  }
+  return msg;
+}
 
 function nz(raw: unknown): string {
   return typeof raw === "string" ? raw.trim() : "";
@@ -282,6 +298,29 @@ export function registerMongoMultiuserApi(
         ok: false,
         error: String(e instanceof Error ? e.message : e),
       });
+    }
+  });
+
+  /** Kiểm tra lại mailbox đã lưu với Microsoft (không gửi mail). */
+  app.post("/api/me/mailbox/test-connection", requireUser, async (req, res) => {
+    try {
+      const uid = (req as AuthedRequest).userId;
+      const cfg = await getUserMailConfig(uid);
+      await verifyMicrosoft365Smtp({
+        mailboxEmail: cfg.smtp.user,
+        mailboxPassword: cfg.smtp.pass,
+      });
+      res.json({
+        ok: true,
+        message:
+          "smtp.office365.com chấp nhận email + mật khẩu mailbox đang lưu (SMTP AUTH).",
+      });
+    } catch (e) {
+      const msg = String(e instanceof Error ? e.message : e);
+      const friendly = msg.includes("[Microsoft")
+        ? msg
+        : formatMicrosoftSmtpError(msg);
+      res.status(400).json({ ok: false, error: friendly });
     }
   });
 
@@ -911,11 +950,14 @@ export function registerMongoMultiuserApi(
           preview: dryRun ? result.dryRunRecipients ?? [] : undefined,
         });
       } catch (e) {
-        const msg = String(e instanceof Error ? e.message : e);
+        const raw = String(e instanceof Error ? e.message : e);
+        const msg = smtpUserFacingError(raw);
         const code =
-          msg.includes("Chưa kết nối") ||
-          msg.includes("Chưa cấu hình SMTP") ||
-          msg.includes("Microsoft 365")
+          raw.includes("Chưa kết nối") ||
+          raw.includes("Chưa cấu hình SMTP") ||
+          raw.includes("Microsoft 365") ||
+          raw.includes("Không có dòng recipient") ||
+          raw.includes("CSV")
             ? 400
             : 500;
         res.status(code).json({ ok: false, error: msg });

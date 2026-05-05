@@ -47,15 +47,24 @@ export async function verifyMicrosoft365Smtp(params: {
     await Promise.race([transporter.verify(), deadline]);
   } catch (e) {
     const raw = String(e instanceof Error ? e.message : e);
-    throw new Error(enhanceMs365SmtpError(raw));
+    throw new Error(formatMicrosoftSmtpError(raw));
   } finally {
     if (timer) clearTimeout(timer);
     transporter.close();
   }
 }
 
-function enhanceMs365SmtpError(raw: string): string {
+/** Dùng cho verify + gửi mail (nodemailer) — gom lỗi Microsoft thành tiếng Việt ngắn. */
+export function formatMicrosoftSmtpError(raw: string): string {
   const low = raw.toLowerCase();
+  if (
+    low.includes("chưa kết nối") ||
+    low.includes("chưa cấu hình") ||
+    low.includes("thiếu file csv") ||
+    low.includes("không có dòng recipient")
+  ) {
+    return raw.slice(0, 500);
+  }
   const tag = "[Microsoft 365 SMTP] ";
 
   if (
@@ -94,6 +103,21 @@ function enhanceMs365SmtpError(raw: string): string {
     low.includes("getaddrinfo")
   ) {
     return `${tag}Không kết nối được tới Microsoft (${raw.slice(0, 220)})`;
+  }
+  if (
+    low.includes("550 5.7.1") ||
+    low.includes("550 5.7.0") ||
+    low.includes("550 5.7.520") ||
+    low.includes("access denied") ||
+    low.includes("not authorized to send")
+  ) {
+    return (
+      tag +
+      "Microsoft từ chối gửi tới người nhận này (chính sách / relay / giới hạn tenant). Admin cần kiểm tra quyền gửi ra ngoài (Outbound spam) và license mailbox."
+    );
+  }
+  if (low.includes("552") || low.includes("quota") || low.includes("mailbox full")) {
+    return tag + "Hộp thư gửi đầy hoặc vượt hạn mức — kiểm tra dung lượng mailbox Microsoft.";
   }
   return tag + raw.slice(0, 480);
 }

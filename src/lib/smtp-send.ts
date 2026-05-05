@@ -110,9 +110,7 @@ export async function sendOneMail(opts: SendMailInput): Promise<OutboundRecord> 
     contentType: mimeFor(p),
   }));
 
-  const displayName =
-    (opts.toName?.trim() || opts.greeting?.trim()) ?? undefined;
-
+  /** Microsoft 365: From/To dạng địa chỉ thuần — tránh 550/5.7.x do header display name lạ. */
   const transporter = nodemailer.createTransport({
     host: opts.smtpHost,
     port: opts.smtpPort,
@@ -156,12 +154,8 @@ export async function sendOneMail(opts: SendMailInput): Promise<OutboundRecord> 
           from: opts.smtpUser,
           to: opts.to,
         },
-        from: displayName
-          ? `"${displayName.replace(/"/g, "")}" <${opts.smtpUser}>`
-          : opts.smtpUser,
-        to: displayName
-          ? `"${displayName.replace(/"/g, "")}" <${opts.to}>`
-          : opts.to,
+        from: opts.smtpUser,
+        to: opts.to,
         subject,
         text: textBody,
         html: htmlBody,
@@ -183,6 +177,8 @@ export async function sendOneMail(opts: SendMailInput): Promise<OutboundRecord> 
       ? info.messageId.trim()
       : messageId;
 
+  const displayName =
+    (opts.toName?.trim() || opts.greeting?.trim()) ?? undefined;
   const record: OutboundRecord = {
     recipientEmail: opts.to,
     recipientName: opts.toName ?? displayName,

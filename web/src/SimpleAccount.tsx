@@ -18,6 +18,7 @@ export function SimpleAccount(props: {
 }) {
   const { onSaved, showToast, variant = "default" } = props;
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [info, setInfo] = useState<AccountGet | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -56,6 +57,29 @@ export function SimpleAccount(props: {
       showToast(String(e instanceof Error ? e.message : e), "err");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const testMicrosoftSmtp = async () => {
+    if (!info?.configured) {
+      showToast("Anh chị lưu email + mật khẩu mailbox trước.", "err");
+      return;
+    }
+    setTesting(true);
+    try {
+      const r = await fj<{ ok: boolean; message?: string }>(
+        "/api/me/mailbox/test-connection",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        },
+      );
+      showToast(r.message ?? "SMTP Microsoft: kết nối OK.", "ok");
+    } catch (e) {
+      showToast(String(e instanceof Error ? e.message : e), "err");
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -126,7 +150,7 @@ export function SimpleAccount(props: {
         <div className="sm:col-span-2 flex flex-wrap items-center gap-2">
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || testing}
             className={
               variant === "compact"
                 ? "rounded-xl bg-gradient-to-r from-accent to-teal-400 px-5 py-2 text-sm font-bold text-ink-950 disabled:opacity-40"
@@ -134,6 +158,18 @@ export function SimpleAccount(props: {
             }
           >
             {busy ? "…" : "Lưu"}
+          </button>
+          <button
+            type="button"
+            disabled={busy || testing || !info?.configured}
+            onClick={() => void testMicrosoftSmtp()}
+            className={
+              variant === "compact"
+                ? "rounded-xl border border-white/15 bg-ink-900/70 px-4 py-2 text-xs font-bold text-muted hover:text-ink-900 disabled:opacity-35"
+                : "rounded-2xl border border-white/15 bg-ink-900/70 px-6 py-3 text-sm font-bold text-muted hover:text-ink-900 disabled:opacity-35"
+            }
+          >
+            {testing ? "…" : "Thử SMTP (Microsoft)"}
           </button>
           {variant === "default" ? (
             <p className="text-[11px] leading-snug text-muted/90">
