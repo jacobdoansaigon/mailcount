@@ -1,0 +1,53 @@
+{
+  "name": "mail-count",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "send": "tsx src/cli/send-campaign.ts",
+    "poll": "tsx src/cli/poll-replies.ts",
+    "export": "tsx src/cli/export-report.ts",
+    "api": "tsx src/server/index.ts",
+    "dev:web": "vite --config web/vite.config.ts",
+    "dev:ui": "concurrently -k \"npm run api\" \"npm run dev:web\"",
+    "build:web": "vite build --config web/vite.config.ts",
+    "build:all": "npm run build && npm run build:web",
+    "start:ui": "NODE_ENV=production tsx src/server/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "csv-parse": "^5.6.0",
+    "dotenv": "^16.4.7",
+    "express": "^5.2.1",
+    "imapflow": "^1.2.8",
+    "mailparser": "^3.9.2",
+    "multer": "^2.1.1",
+    "nanoid": "^5.1.2",
+    "nodemailer": "^6.9.16"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/mailparser": "^3.4.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^22.10.5",
+    "@types/nodemailer": "^6.4.17",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "autoprefixer": "^10.5.0",
+    "concurrently": "^9.2.1",
+    "postcss": "^8.5.14",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vite": "^8.0.10"
+  }
+}

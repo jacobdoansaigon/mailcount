@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  letter-spacing: 0.01em;
+}
+
+.soft-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #354357 transparent;
+}
+
+.soft-scroll::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.soft-scroll::-webkit-scrollbar-thumb {
+  background: #354357;
+  border-radius: 999px;
+}

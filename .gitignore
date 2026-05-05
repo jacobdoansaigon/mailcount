@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+data/outbound-log.jsonl
+data/replies/
+data/.ui-send/
+data/campaign-recipients.csv
+web/dist/
+*.log
+.DS_Store
