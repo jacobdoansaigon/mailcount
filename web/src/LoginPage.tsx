@@ -9,6 +9,8 @@ type AuthConfig = {
 };
 
 const RESEND_COOLDOWN_S = 45;
+/** Magic link gọi SMTP — tránh nút kẹt vô hạn nếu mạng/SMTP treo */
+const MAGIC_LINK_FETCH_MS = 60_000;
 
 export function LoginPage(props: {
   onLoggedIn: () => void;
@@ -67,11 +69,14 @@ export function LoginPage(props: {
     const em = emRaw.trim().toLowerCase();
     if (!em) return;
     setBusy(true);
+    const ac = new AbortController();
+    const tid = window.setTimeout(() => ac.abort(), MAGIC_LINK_FETCH_MS);
     try {
       await fetchJson<{ ok: boolean; message?: string }>("/api/auth/magic-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: em }),
+        signal: ac.signal,
       });
       setSentToEmail(em);
       setLinkSent(true);
@@ -80,6 +85,7 @@ export function LoginPage(props: {
     } catch (e) {
       showToast(String(e instanceof Error ? e.message : e), "err");
     } finally {
+      window.clearTimeout(tid);
       setBusy(false);
     }
   };

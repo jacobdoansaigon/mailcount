@@ -5,7 +5,15 @@ const withCreds = (init?: RequestInit): RequestInit => ({
 });
 
 export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(path, withCreds(init));
+  let r: Response;
+  try {
+    r = await fetch(path, withCreds(init));
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error("Hết thời gian chờ máy chủ — thử lại sau.");
+    }
+    throw e;
+  }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error((data as { error?: string }).error ?? r.statusText);
   return data as T;
