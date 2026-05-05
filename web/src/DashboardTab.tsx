@@ -106,7 +106,11 @@ export function DashboardTab(props: {
           <h3 className="font-display text-lg font-semibold text-white">
             Hoạt động 14 ngày gần đây
           </h3>
-          <p className="mt-1 text-xs text-muted">Mỗi cột: gửi (xanh ngọc) · phản hồi import (tím)</p>
+          <p className="mt-1 text-xs text-muted">
+            Mỗi ngày hai cột:{" "}
+            <span className="text-accent">■</span> đã gửi ·{" "}
+            <span className="text-accent2">■</span> phản hồi đã import
+          </p>
           <div className="mt-6 flex h-48 items-end gap-1 sm:gap-1.5">
             {d.timeline.map((t) => {
               const sh = (t.sent / maxBar) * 100;
