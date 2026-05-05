@@ -80,7 +80,7 @@ export function App() {
 
   const [subject, setSubject] = useState("Khảo sát hợp tác [{{code}}]");
   const [body, setBody] = useState(
-    "Anh/Chị chào,\n\nVui lòng trả lời trực tiếp email này (có đính kèm nếu cần).\n\nTrân trọng,",
+    "Chào {{greetingOrName}},\n\nVui lòng trả lời trực tiếp email này (có đính kèm nếu cần).\n\nTrân trọng,",
   );
   const [dryRun, setDryRun] = useState(false);
   const [limit, setLimit] = useState("3");
@@ -328,13 +328,17 @@ export function App() {
             <p className="mt-1 text-xs text-muted">
               {useSavedRecipients ? (
                 <>
-                  Đang dùng file đã lưu (mục Danh sách email). Đính kèm upload thêm vẫn gộp với{" "}
-                  <code className="text-ink-900">data/attachments</code>.
+                  Đang dùng file đã lưu (mục Danh sách email); có thể thêm cột{" "}
+                  <code className="text-ink-900">greeting</code> cho mẫu{" "}
+                  <code className="text-ink-900">{"{{greetingOrName}}"}</code>. Đính kèm upload thêm
+                  vẫn gộp với <code className="text-ink-900">data/attachments</code>.
                 </>
               ) : (
                 <>
-                  CSV cột <code className="text-ink-900">email</code> bắt buộc nếu không dùng danh
-                  sách đã lưu. File upload thêm gộp với{" "}
+                  CSV cột <code className="text-ink-900">email</code> bắt buộc; cột{" "}
+                  <code className="text-ink-900">greeting</code> (vd Anh Minh, Chị Lan) để mẫu mail
+                  dùng <code className="text-ink-900">{"{{greetingOrName}}"}</code>. File upload thêm
+                  gộp với{" "}
                   <code className="text-ink-900">data/attachments</code>.
                 </>
               )}
@@ -367,6 +371,13 @@ export function App() {
                 rows={7}
                 className="mt-1 w-full resize-y rounded-xl border border-stroke bg-ink-950/50 px-3 py-2 font-mono text-xs text-ink-900 outline-none focus:border-accent"
               />
+              <span className="mt-1 block text-[11px] leading-relaxed text-muted">
+                Mẫu: <code className="text-ink-900">{"{{greeting}}"}</code>,{" "}
+                <code className="text-ink-900">{"{{greetingOrName}}"}</code>,{" "}
+                <code className="text-ink-900">{"{{name}}"}</code>,{" "}
+                <code className="text-ink-900">{"{{email}}"}</code>,{" "}
+                <code className="text-ink-900">{"{{code}}"}</code> — áp dụng cả tiêu đề và nội dung.
+              </span>
             </label>
 
             <div className="mt-3 grid gap-3 sm:grid-cols-2">

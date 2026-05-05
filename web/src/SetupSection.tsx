@@ -320,7 +320,8 @@ export function SavedRecipientsBlock(props: {
         Lưu file CSV để tái dùng
       </h2>
       <p className="mt-1 text-xs text-muted">
-        Sau khi lưu, anh có thể tick «Dùng danh sách đã lưu» trong form gửi — không phải chọn file CSV mỗi lần.
+        Sau khi lưu, anh có thể tick «Dùng danh sách đã lưu» trong form gửi — không phải chọn file CSV mỗi lần. Cột tuỳ chọn{" "}
+        <code className="text-ink-900">greeting</code> (Anh A, Chị B…) để cá nhân hóa mẫu mail.
       </p>
       <div className="mt-3 rounded-lg border border-stroke bg-ink-950/35 p-3 font-mono text-[11px] text-muted">
         <p>Tệp máy chủ:</p>

@@ -13,6 +13,8 @@ export type SendMailInput = {
   smtpPass: string;
   to: string;
   toName?: string;
+  /** Xưng hô cá nhân (vd từ CSV): "Anh Minh", "Chị Lan" — dùng trong mẫu {{greeting}} / {{greetingOrName}} */
+  greeting?: string;
   subjectTemplate: string;
   textBody: string;
   htmlBody?: string;
@@ -47,32 +49,63 @@ function domainFromEmail(addr: string): string {
   return addr.slice(at + 1) || "localhost";
 }
 
-export function renderSubject(template: string, ctx: RecipientContext): string {
+export type MailTemplateContext = {
+  surveyCode: string;
+  name?: string;
+  email: string;
+  greeting?: string;
+};
+
+/** Thay placeholder trong tiêu đề / nội dung text / HTML. */
+export function renderMailTemplate(
+  template: string,
+  ctx: MailTemplateContext,
+): string {
+  const name = (ctx.name ?? "").trim();
+  const greeting = (ctx.greeting ?? "").trim();
+  const greetingOrName = greeting || name;
   return template
+    .replaceAll("{{greetingOrName}}", greetingOrName)
+    .replaceAll("{{greeting}}", greeting)
     .replaceAll("{{code}}", ctx.surveyCode)
-    .replaceAll("{{name}}", ctx.name ?? "")
+    .replaceAll("{{name}}", name)
     .replaceAll("{{email}}", ctx.email);
 }
 
-type RecipientContext = { surveyCode: string; name?: string; email: string };
+export function renderSubject(
+  template: string,
+  ctx: MailTemplateContext,
+): string {
+  return renderMailTemplate(template, ctx);
+}
 
 export async function sendOneMail(opts: SendMailInput): Promise<OutboundRecord> {
   const domain = domainFromEmail(opts.smtpUser);
   const messageId = `<${nanoid(16)}.${Date.now()}@${domain}>`;
-  let subject = renderSubject(opts.subjectTemplate, {
+  const tplCtx: MailTemplateContext = {
     surveyCode: opts.surveyCode,
     name: opts.toName,
     email: opts.to,
-  });
+    greeting: opts.greeting,
+  };
+  let subject = renderMailTemplate(opts.subjectTemplate, tplCtx);
   if (!/\[CODE:/i.test(subject)) {
     subject = `${subject.trimEnd()} [CODE: ${opts.surveyCode}]`;
   }
+
+  const textBody = renderMailTemplate(opts.textBody, tplCtx);
+  const htmlBody = opts.htmlBody
+    ? renderMailTemplate(opts.htmlBody, tplCtx)
+    : undefined;
 
   const attachments = opts.attachmentPaths.map((p) => ({
     filename: path.basename(p),
     content: fs.createReadStream(p),
     contentType: mimeFor(p),
   }));
+
+  const displayName =
+    (opts.toName?.trim() || opts.greeting?.trim()) ?? undefined;
 
   const transporter = nodemailer.createTransport({
     host: opts.smtpHost,
@@ -89,15 +122,15 @@ export async function sendOneMail(opts: SendMailInput): Promise<OutboundRecord> 
       from: opts.smtpUser,
       to: opts.to,
     },
-    from: opts.toName
-      ? `"${opts.toName.replace(/"/g, "")}" <${opts.smtpUser}>`
+    from: displayName
+      ? `"${displayName.replace(/"/g, "")}" <${opts.smtpUser}>`
       : opts.smtpUser,
-    to: opts.toName
-      ? `"${opts.toName.replace(/"/g, "")}" <${opts.to}>`
+    to: displayName
+      ? `"${displayName.replace(/"/g, "")}" <${opts.to}>`
       : opts.to,
     subject,
-    text: opts.textBody,
-    html: opts.htmlBody,
+    text: textBody,
+    html: htmlBody,
     messageId,
     headers: {
       "X-Survey-Code": opts.surveyCode,
@@ -112,7 +145,7 @@ export async function sendOneMail(opts: SendMailInput): Promise<OutboundRecord> 
 
   const record: OutboundRecord = {
     recipientEmail: opts.to,
-    recipientName: opts.toName,
+    recipientName: opts.toName ?? displayName,
     surveyCode: opts.surveyCode,
     messageId: actualMid,
     sentAt: new Date().toISOString(),

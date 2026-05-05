@@ -41,6 +41,7 @@ export type RunSendCampaignParams = {
 export type DryRunRecipient = {
   email: string;
   name?: string;
+  greeting?: string;
   surveyCode: string;
 };
 
@@ -82,6 +83,7 @@ export async function runSendCampaign(
     const dryRunRecipients: DryRunRecipient[] = toSend.map((r) => ({
       email: r.email,
       name: r.name,
+      greeting: r.greeting,
       surveyCode:
         r.surveyCode?.trim() ||
         nanoid(10).replace(/-/g, "").slice(0, 10).toUpperCase(),
@@ -109,6 +111,7 @@ export async function runSendCampaign(
       smtpPass: p.smtp.pass,
       to: r.email,
       toName: r.name,
+      greeting: r.greeting,
       subjectTemplate: p.subjectTemplate,
       textBody: p.textBody,
       htmlBody: p.htmlBody,

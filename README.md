@@ -57,6 +57,7 @@ Xem hướng dẫn từng bước: [`docs/GITHUB.md`](docs/GITHUB.md).
 ## Chuẩn bị
 
 - **`data/recipients.csv`:** cột bắt buộc `email`; thêm `name`, `survey_code` (tùy — thiếu thì tool tự sinh mã).
+- **Cá nhân hóa xưng hô:** cột `greeting` (hoặc `salutation`, `xung_ho`, `loi_chao`, `chao`) — mỗi dòng một cách gọi, ví dụ `Anh Minh`, `Chị Lan`. Trong tiêu đề và nội dung (text/HTML) dùng placeholder `{{greeting}}` hoặc `{{greetingOrName}}` (ưu tiên greeting, không có thì lấy `name`). Có thêm `{{name}}`, `{{email}}`, `{{code}}`. Xem `data/recipients.example.csv` và `data/body.example.txt`.
 - **`data/attachments/`:** mọi file trong thư mục sẽ đính kèm **mỗi** mail gửi đi.
 - **Nội dung mail:** file text (và tùy chọn HTML).
 

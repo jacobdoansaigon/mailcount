@@ -5,7 +5,8 @@
  * Usage:
  *   npm run send -- --csv ./data/recipients.csv --subject-template "Đánh giá [{{code}}]" --text ./data/body.txt
  *
- * placeholders: {{code}}, {{name}}, {{email}}
+ * placeholders (tiêu đề + text + HTML): {{code}}, {{name}}, {{email}},
+ * {{greeting}}, {{greetingOrName}} (greeting từ cột CSV greeting / salutation / …)
  */
 import fs from "node:fs";
 import path from "node:path";

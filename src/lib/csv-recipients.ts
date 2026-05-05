@@ -5,12 +5,21 @@ import { parse } from "csv-parse/sync";
 export type RecipientRow = {
   email: string;
   name?: string;
+  /** Xưng hô mở đầu mail, vd "Anh Minh", "Chị Lan" — placeholder {{greeting}} / {{greetingOrName}} */
+  greeting?: string;
   surveyCode?: string;
 };
 
 const EMAIL_COLS = ["email", "mail", "e-mail", "email_address"];
 const NAME_COLS = ["name", "fullname", "ho_ten", "ten"];
 const CODE_COLS = ["survey_code", "code", "ma", "surveycode"];
+const GREETING_COLS = [
+  "greeting",
+  "salutation",
+  "xung_ho",
+  "loi_chao",
+  "chao",
+];
 
 function pickCol(
   record: Record<string, string>,
@@ -40,8 +49,14 @@ export function loadRecipientsCsv(filePath: string): RecipientRow[] {
     const email = pickCol(record, EMAIL_COLS);
     if (!email) continue;
     const name = pickCol(record, NAME_COLS);
+    const greeting = pickCol(record, GREETING_COLS);
     const surveyCode = pickCol(record, CODE_COLS);
-    out.push({ email, name: name || undefined, surveyCode });
+    out.push({
+      email,
+      name: name || undefined,
+      greeting: greeting || undefined,
+      surveyCode,
+    });
   }
   return out;
 }
