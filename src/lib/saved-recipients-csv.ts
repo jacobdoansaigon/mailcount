@@ -3,7 +3,7 @@ import path from "node:path";
 import type { RecipientRow } from "./csv-recipients.js";
 import { loadRecipientsCsv } from "./csv-recipients.js";
 
-const HEADER = "email,name,greeting,survey_code";
+const HEADER = "email,name,greeting,title,survey_code";
 
 function escapeCell(v: string): string {
   if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
@@ -15,6 +15,7 @@ function rowToLine(r: RecipientRow): string {
     r.email,
     r.name ?? "",
     r.greeting ?? "",
+    r.title ?? "",
     r.surveyCode ?? "",
   ]
     .map(escapeCell)
@@ -41,7 +42,7 @@ async function writeAll(filePath: string, rows: RecipientRow[]): Promise<void> {
  */
 export async function upsertManualSavedRecipient(
   filePath: string,
-  entry: { email: string; name?: string; greeting?: string },
+  entry: { email: string; name?: string; greeting?: string; title?: string },
 ): Promise<RecipientRow[]> {
   const emailRaw = entry.email.trim();
   const lower = emailRaw.toLowerCase();
@@ -56,17 +57,22 @@ export async function upsertManualSavedRecipient(
 
   const name = entry.name?.trim() || undefined;
   const greeting = entry.greeting?.trim() || undefined;
+  const title = entry.title?.trim() || undefined;
   const next: RecipientRow = {
     email: emailRaw,
     name,
     greeting,
+    title,
   };
 
   const idx = rows.findIndex((r) => r.email.toLowerCase().trim() === lower);
   if (idx >= 0) {
     const prev = rows[idx]!;
     rows[idx] = {
-      ...next,
+      email: emailRaw,
+      name: name ?? prev.name,
+      greeting: greeting ?? prev.greeting,
+      title: title ?? prev.title,
       surveyCode: prev.surveyCode?.trim() || next.surveyCode,
     };
   } else {

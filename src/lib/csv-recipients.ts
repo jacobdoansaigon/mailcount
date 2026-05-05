@@ -7,12 +7,22 @@ export type RecipientRow = {
   name?: string;
   /** Xưng hô mở đầu mail, vd "Anh Minh", "Chị Lan" — placeholder {{greeting}} / {{greetingOrName}} */
   greeting?: string;
+  /** Chức vụ — {{title}} */
+  title?: string;
   surveyCode?: string;
 };
 
 const EMAIL_COLS = ["email", "mail", "e-mail", "email_address"];
 const NAME_COLS = ["name", "fullname", "ho_ten", "ten"];
 const CODE_COLS = ["survey_code", "code", "ma", "surveycode"];
+const TITLE_COLS = [
+  "title",
+  "job_title",
+  "position",
+  "chuc_vu",
+  "chức vụ",
+  "role",
+];
 const GREETING_COLS = [
   "greeting",
   "salutation",
@@ -50,11 +60,13 @@ export function loadRecipientsCsv(filePath: string): RecipientRow[] {
     if (!email) continue;
     const name = pickCol(record, NAME_COLS);
     const greeting = pickCol(record, GREETING_COLS);
+    const title = pickCol(record, TITLE_COLS);
     const surveyCode = pickCol(record, CODE_COLS);
     out.push({
       email,
       name: name || undefined,
       greeting: greeting || undefined,
+      title: title || undefined,
       surveyCode,
     });
   }

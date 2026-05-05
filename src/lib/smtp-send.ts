@@ -15,6 +15,8 @@ export type SendMailInput = {
   toName?: string;
   /** Xưng hô cá nhân (vd từ CSV): "Anh Minh", "Chị Lan" — dùng trong mẫu {{greeting}} / {{greetingOrName}} */
   greeting?: string;
+  /** Chức vụ — {{title}} */
+  title?: string;
   subjectTemplate: string;
   textBody: string;
   htmlBody?: string;
@@ -54,6 +56,7 @@ export type MailTemplateContext = {
   name?: string;
   email: string;
   greeting?: string;
+  title?: string;
 };
 
 /** Thay placeholder trong tiêu đề / nội dung text / HTML. */
@@ -64,12 +67,14 @@ export function renderMailTemplate(
   const name = (ctx.name ?? "").trim();
   const greeting = (ctx.greeting ?? "").trim();
   const greetingOrName = greeting || name;
+  const title = (ctx.title ?? "").trim();
   return template
     .replaceAll("{{greetingOrName}}", greetingOrName)
     .replaceAll("{{greeting}}", greeting)
     .replaceAll("{{code}}", ctx.surveyCode)
     .replaceAll("{{name}}", name)
-    .replaceAll("{{email}}", ctx.email);
+    .replaceAll("{{email}}", ctx.email)
+    .replaceAll("{{title}}", title);
 }
 
 export function renderSubject(
@@ -87,6 +92,7 @@ export async function sendOneMail(opts: SendMailInput): Promise<OutboundRecord> 
     name: opts.toName,
     email: opts.to,
     greeting: opts.greeting,
+    title: opts.title,
   };
   let subject = renderMailTemplate(opts.subjectTemplate, tplCtx);
   if (!/\[CODE:/i.test(subject)) {

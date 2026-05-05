@@ -1,10 +1,18 @@
+import fs from "node:fs";
 import type { OutboundRecord, ReplyRecord } from "./types.js";
-import { buildReportRows } from "./report.js";
+import { buildReportRows, pickRepliesForOutbound } from "./report.js";
 
 export type DashboardTimelinePoint = {
   date: string;
   sent: number;
   replies: number;
+};
+
+export type LeaderboardEntry = {
+  email: string;
+  name: string;
+  /** Hiển thị ngắn: thời gian phản hồi hoặc điểm nội dung */
+  label: string;
 };
 
 export type DashboardPayload = {
@@ -20,9 +28,118 @@ export type DashboardPayload = {
   repliesWithAttachments: number;
   lastSentAt: string | null;
   lastReplyAt: string | null;
+  /** Phản hồi nhanh nhất (so với lúc gửi) — tối đa 2 */
+  fastestReplies: LeaderboardEntry[];
+  /** Phản hồi có nhiều nội dung nhất (dung lượng + đính kèm) — tối đa 2 */
+  richestReplies: LeaderboardEntry[];
 };
 
 const MS_DAY = 86400000;
+
+function formatDurationShort(ms: number): string {
+  const s = Math.round(ms / 1000);
+  if (s < 120) return `${s}s`;
+  const m = Math.round(ms / 60000);
+  if (m < 120) return `${m}p`;
+  const h = Math.floor(ms / 3600000);
+  const rm = Math.round((ms % 3600000) / 60000);
+  return `${h}g${rm}p`;
+}
+
+function replyInfoScore(r: ReplyRecord): number {
+  let score = (r.attachmentPaths?.length ?? 0) * 8000;
+  for (const p of [r.bodyTextPath, r.bodyHtmlPath]) {
+    if (!p) continue;
+    try {
+      score += fs.statSync(p).size;
+    } catch {
+      /* missing */
+    }
+  }
+  score += (r.subject?.length ?? 0) * 3;
+  return score;
+}
+
+function computeLeaderboards(
+  outbound: OutboundRecord[],
+  replies: ReplyRecord[],
+): {
+  fastestReplies: LeaderboardEntry[];
+  richestReplies: LeaderboardEntry[];
+} {
+  type Fast = { email: string; name: string; deltaMs: number };
+  const fastList: Fast[] = [];
+  for (const o of outbound) {
+    const hits = pickRepliesForOutbound(o, replies);
+    if (!hits.length) continue;
+    const sorted = [...hits].sort(
+      (a, b) =>
+        new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime(),
+    );
+    const first = sorted[0]!;
+    const delta =
+      new Date(first.receivedAt).getTime() - new Date(o.sentAt).getTime();
+    if (!Number.isFinite(delta) || delta < 0) continue;
+    fastList.push({
+      email: o.recipientEmail,
+      name: (o.recipientName ?? "").trim(),
+      deltaMs: delta,
+    });
+  }
+  fastList.sort((a, b) => a.deltaMs - b.deltaMs);
+  const seenFast = new Set<string>();
+  const fastestReplies: LeaderboardEntry[] = [];
+  for (const x of fastList) {
+    const k = x.email.toLowerCase();
+    if (seenFast.has(k)) continue;
+    seenFast.add(k);
+    fastestReplies.push({
+      email: x.email,
+      name: x.name,
+      label: `${formatDurationShort(x.deltaMs)}${x.name ? ` · ${x.name}` : ""}`,
+    });
+    if (fastestReplies.length >= 2) break;
+  }
+
+  type Rich = { email: string; name: string; score: number };
+  const richList: Rich[] = [];
+  for (const o of outbound) {
+    const hits = pickRepliesForOutbound(o, replies);
+    if (!hits.length) continue;
+    let best = hits[0]!;
+    let bestScore = replyInfoScore(best);
+    for (const h of hits.slice(1)) {
+      const sc = replyInfoScore(h);
+      if (sc > bestScore) {
+        bestScore = sc;
+        best = h;
+      }
+    }
+    if (bestScore <= 0) continue;
+    richList.push({
+      email: o.recipientEmail,
+      name: (o.recipientName ?? "").trim(),
+      score: bestScore,
+    });
+  }
+  richList.sort((a, b) => b.score - a.score);
+  const seenRich = new Set<string>();
+  const richestReplies: LeaderboardEntry[] = [];
+  for (const x of richList) {
+    const k = x.email.toLowerCase();
+    if (seenRich.has(k)) continue;
+    seenRich.add(k);
+    const kb = Math.round(x.score / 1024);
+    richestReplies.push({
+      email: x.email,
+      name: x.name,
+      label: `${kb >= 1 ? `~${kb} KB` : `${x.score} B`}${x.name ? ` · ${x.name}` : ""}`,
+    });
+    if (richestReplies.length >= 2) break;
+  }
+
+  return { fastestReplies, richestReplies };
+}
 
 export function buildDashboardPayload(
   outbound: OutboundRecord[],
@@ -79,6 +196,11 @@ export function buildDashboardPayload(
     replies: v.replies,
   }));
 
+  const { fastestReplies, richestReplies } = computeLeaderboards(
+    outbound,
+    replies,
+  );
+
   return {
     totals: {
       sent,
@@ -92,5 +214,7 @@ export function buildDashboardPayload(
     repliesWithAttachments,
     lastSentAt,
     lastReplyAt,
+    fastestReplies,
+    richestReplies,
   };
 }

@@ -70,3 +70,48 @@ Healthcheck: `GET /api/health`.
 - **502 / không lên**: xem **Deploy logs** — thường thiếu `SMTP_USER` / `SMTP_PASS` hoặc build lỗi.
 - **Permission denied mail**: kiểm tra tenant Microsoft (SMTP AUTH / IMAP).
 - **SPA trắng**: đảm bảo build có `web/dist/` (script `npm run build`).
+
+---
+
+## Chế độ nhiều user + magic link + MongoDB
+
+Khi có **`MONGODB_URI`** hoặc **`MONGO_URL`** (Railway Mongo plugin), API chuyển sang đăng nhập magic link, user và danh sách email lưu Mongo; log gửi/phản hồi vẫn nằm dưới `data/` (nên gắn **Volume** nếu cần giữ lâu).
+
+| Biến | Ý |
+|------|---|
+| `MONGODB_URI` | Chuỗi kết nối Mongo **hoặc** tham chiếu Railway `${{TenServiceMongo.MONGO_URL}}` |
+| `MONGO_URL` | App cũng đọc biến này (plugin Mongo trên Railway thường chỉ inject `MONGO_URL`) |
+| `JWT_SECRET` | **Bắt buộc** — chuỗi ngẫu nhiên ≥ 16 ký tự (ký phiên cookie) |
+| `SMTP_USER` / `SMTP_PASS` | **Bắt buộc** cho multi-user — mail **hệ thống** gửi magic link (không phải mailbox khảo sát từng user) |
+| `PUBLIC_APP_URL` | Tuỳ chọn — nếu không set, app dùng `https://${RAILWAY_PUBLIC_DOMAIN}` cho link trong email |
+
+**Lưu ý bảo mật:** lệnh `railway variable list --json` có thể in ra giá trị thật của secret — tránh chạy trong môi trường lộ log; trên dashboard dùng nút **Secret** cho `SMTP_PASS` / `JWT_SECRET`.
+
+### Bước trên Dashboard (khuyến nghị vì `railway add` đôi khi báo Unauthorized)
+
+1. Project → **+ New** → **Database** → **MongoDB**. Đặt tên service cho dễ nhớ (ví dụ **`Mongo`**).
+2. Service **mailcount** → **Variables** → thêm **`MONGODB_URI`** = `${{Mongo.MONGO_URL}}` (đổi `Mongo` đúng tên service anh đặt; **không** bọc ngoặc kép trên UI nếu Railway báo lỗi — xem [Using Variables](https://docs.railway.com/guides/variables)).
+3. Cùng service **mailcount**: **`JWT_SECRET`** (đã có thể được set sẵn qua CLI), **`SMTP_USER`**, **`SMTP_PASS`**.
+4. **Redeploy** mailcount sau khi Mongo đã chạy xanh.
+
+### CLI sau `railway login`
+
+```bash
+cd /path/to/Mail-count
+railway link   # nếu chưa link project/service
+
+# Sau khi đã có service Mongo (tên mặc định Mongo):
+./scripts/railway-multiuser-wire-mongo.sh Mongo
+
+# Hoặc tự set:
+railway variable set -s mailcount -e production 'MONGODB_URI=${{Mongo.MONGO_URL}}'
+
+# Nếu `railway add -d mongo` báo Unauthorized: chạy `railway login` lại rồi thử, hoặc tạo Mongo trên dashboard.
+```
+
+### Đã thực hiện trên project Railway của anh (qua CLI trong phiên này)
+
+- Đã đặt **`JWT_SECRET`** mới (đã rotate một lần vì lệnh list JSON có thể lộ giá trị cũ trong log — anh coi secret hiện tại là bản dùng chính thức).
+- **`MONGODB_URI`** đã **gỡ** tạm thời vì chưa có service Mongo nên tham chiếu resolve rỗng → app vẫn chạy **chế độ một mailbox** (`SMTP_*` như cũ). Khi anh tạo Mongo xong, chạy `./scripts/railway-multiuser-wire-mongo.sh <TênService>` hoặc set biến trên dashboard như trên.
+
+**Anh vẫn cần tự nhập trên Railway:** `SMTP_USER` + `SMTP_PASS` (em không có mật khẩu mailbox của anh). Sau khi gắn Mongo + `MONGODB_URI`, magic link và tài khoản per-user mới hoạt động đầy đủ.

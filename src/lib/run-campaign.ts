@@ -42,6 +42,7 @@ export type DryRunRecipient = {
   email: string;
   name?: string;
   greeting?: string;
+  title?: string;
   surveyCode: string;
 };
 
@@ -84,6 +85,7 @@ export async function runSendCampaign(
       email: r.email,
       name: r.name,
       greeting: r.greeting,
+      title: r.title,
       surveyCode:
         r.surveyCode?.trim() ||
         nanoid(10).replace(/-/g, "").slice(0, 10).toUpperCase(),
@@ -112,6 +114,7 @@ export async function runSendCampaign(
       to: r.email,
       toName: r.name,
       greeting: r.greeting,
+      title: r.title,
       subjectTemplate: p.subjectTemplate,
       textBody: p.textBody,
       htmlBody: p.htmlBody,

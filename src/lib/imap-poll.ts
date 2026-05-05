@@ -61,6 +61,8 @@ export type PollOptions = {
   since?: Date;
   /** Inbox only */
   mailbox?: string;
+  /** Nếu có — bỏ qua loadImapAuth() từ .env (đa người dùng / MongoDB) */
+  imapAuth?: { user: string; pass: string };
 };
 
 function extractParsedMessageId(parsed: ParsedMail): string | undefined {
@@ -82,7 +84,7 @@ function inboundDedupeKey(
 }
 
 export async function pollRepliesToFolder(opts: PollOptions): Promise<ReplyRecord[]> {
-  const auth = loadImapAuth();
+  const auth = opts.imapAuth ?? loadImapAuth();
   const outbound = await readOutboundLog(opts.outboundLogPath);
   const lookup = messageIdLookup(outbound);
   const mb = opts.mailbox ?? "INBOX";
