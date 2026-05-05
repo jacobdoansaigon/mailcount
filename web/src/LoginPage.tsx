@@ -205,10 +205,11 @@ export function LoginPage(props: {
 
                   {cfg && cfg.multiUser && cfg.systemMailConfigured === false ? (
                     <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
-                      Máy chủ chưa cấu hình SMTP gửi mail hệ thống. Admin cần đặt{" "}
-                      <code className="rounded bg-ink-950/80 px-1.5 py-0.5 text-ink-900">SMTP_USER</code> và{" "}
-                      <code className="rounded bg-ink-950/80 px-1.5 py-0.5 text-ink-900">SMTP_PASS</code> trên server
-                      thì mới gửi được magic link.
+                      Máy chủ chưa cấu hình gửi magic link. Admin cần đặt{" "}
+                      <code className="rounded bg-ink-950/80 px-1.5 py-0.5 text-ink-900">RESEND_API_KEY</code> (+{" "}
+                      <code className="rounded bg-ink-950/80 px-1.5 py-0.5 text-ink-900">RESEND_FROM</code>) hoặc{" "}
+                      <code className="rounded bg-ink-950/80 px-1.5 py-0.5 text-ink-900">SMTP_USER</code> /{" "}
+                      <code className="rounded bg-ink-950/80 px-1.5 py-0.5 text-ink-900">SMTP_PASS</code> trên server.
                     </div>
                   ) : null}
 

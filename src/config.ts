@@ -72,6 +72,17 @@ export function isMailConfigComplete(): boolean {
   return Boolean(user.trim() && pass.trim());
 }
 
+/** Gửi magic link qua Resend (HTTP) — không phụ thuộc SMTP tới Office365 từ IP cloud. */
+export function isResendApiConfigured(): boolean {
+  refreshEnvFromDisk();
+  return Boolean(process.env["RESEND_API_KEY"]?.trim());
+}
+
+/** Đủ điều kiện gửi magic link: SMTP hệ thống hoặc Resend. */
+export function isMagicLinkMailConfigured(): boolean {
+  return isMailConfigComplete() || isResendApiConfigured();
+}
+
 export function getStoragePaths(): {
   attachmentsDir: string;
   repliesDir: string;

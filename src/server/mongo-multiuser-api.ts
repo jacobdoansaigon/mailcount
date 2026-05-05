@@ -16,7 +16,7 @@ import {
   verifySessionToken,
   getJwtSecret,
 } from "../auth/session-jwt.js";
-import { isMailConfigComplete } from "../config.js";
+import { isMagicLinkMailConfigured } from "../config.js";
 import { buildDashboardPayload } from "../lib/dashboard-stats.js";
 import { collectAttachmentPaths } from "../lib/csv-recipients.js";
 import { pollRepliesToFolder } from "../lib/imap-poll.js";
@@ -135,17 +135,17 @@ export function registerMongoMultiuserApi(
       ok: true,
       multiUser: true,
       publicUrl: publicAppBase(),
-      systemMailConfigured: isMailConfigComplete(),
+      systemMailConfigured: isMagicLinkMailConfigured(),
     });
   });
 
   app.post("/api/auth/magic-link", async (req, res) => {
     try {
-      if (!isMailConfigComplete()) {
+      if (!isMagicLinkMailConfigured()) {
         res.status(503).json({
           ok: false,
           error:
-            "Server chưa cấu hình SMTP gửi mail hệ thống (để gửi magic link). Admin cần đặt SMTP_USER và SMTP_PASS trên server.",
+            "Server chưa cấu hình gửi magic link. Admin đặt RESEND_API_KEY (+ RESEND_FROM) hoặc SMTP_USER và SMTP_PASS trên server.",
         });
         return;
       }
