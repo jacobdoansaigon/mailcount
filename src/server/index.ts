@@ -594,6 +594,15 @@ async function bootstrap(): Promise<void> {
           if (!Number.isNaN(n) && n >= 0) limitRaw = n;
         } else if (typeof req.body?.limit === "number") limitRaw = req.body.limit;
 
+        const previewRows = loadRecipientsCsv(path.resolve(csvPathResolved));
+        let sendN = previewRows.length;
+        if (limitRaw !== undefined && Number.isFinite(limitRaw)) {
+          sendN = Math.min(sendN, Math.max(0, limitRaw));
+        }
+        console.error(
+          `[mail-count] send start: ${sendN} recipient(s), delayMs=${delayMs}`,
+        );
+
         const result = await runSendCampaign({
           csvPath: csvPathResolved,
           subjectTemplate,
@@ -612,6 +621,10 @@ async function bootstrap(): Promise<void> {
           attachmentsDir: cfg.attachmentsDir,
           outboundLogPath: cfg.outboundLogPath,
         });
+
+        console.error(
+          `[mail-count] send done: recipientCount=${result.recipientCount}`,
+        );
 
         res.json({
           ok: true,
@@ -641,7 +654,9 @@ async function bootstrap(): Promise<void> {
   }
 
   await new Promise<void>((resolve) => {
-    app.listen(PORT, LISTEN_HOST, () => {
+    const httpServer = app.listen(PORT, LISTEN_HOST, () => {
+      /** Cho phép POST /api/send chạy lâu (nhiều người × delay SMTP) */
+      httpServer.setTimeout(900_000);
       resolve();
       const mode =
         process.env["NODE_ENV"] === "production"

@@ -111,6 +111,9 @@ export async function sendOneMail(opts: SendMailInput): Promise<OutboundRecord> 
     host: opts.smtpHost,
     port: opts.smtpPort,
     secure: opts.smtpSecure,
+    connectionTimeout: 25_000,
+    greetingTimeout: 25_000,
+    socketTimeout: 120_000,
     auth: {
       user: opts.smtpUser,
       pass: opts.smtpPass,

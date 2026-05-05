@@ -184,15 +184,39 @@ export function App() {
     fd.set("useSavedRecipients", useSavedRecipients ? "1" : "");
     fd.set("limit", limit.trim());
     setBusy(true);
+    const ac = new AbortController();
+    const t = window.setTimeout(() => ac.abort(), 900_000);
     try {
-      const r = await fetch("/api/send", { method: "POST", body: fd });
-      const data = await r.json();
+      const r = await fetch("/api/send", {
+        method: "POST",
+        body: fd,
+        signal: ac.signal,
+      });
+      const raw = await r.text();
+      let data: { error?: string; recipientCount?: number } = {};
+      if (raw.trim()) {
+        try {
+          data = JSON.parse(raw) as typeof data;
+        } catch {
+          throw new Error(
+            raw.length > 180 ? `${raw.slice(0, 180)}…` : raw || r.statusText,
+          );
+        }
+      }
       if (!r.ok) throw new Error(data.error ?? r.statusText);
       showToast(`Đã gửi ${data.recipientCount ?? 0} email.`, "ok");
       await loadAll();
     } catch (e) {
-      showToast(String(e instanceof Error ? e.message : e), "err");
+      if (e instanceof Error && e.name === "AbortError") {
+        showToast(
+          "Đã quá 15 phút chờ — có thể danh sách quá dài hoặc mạng/SMTP không phản hồi. Thử «Tuỳ chọn nâng cao» chỉ gửi vài người, hoặc chạy production (npm start) thay vì dev proxy.",
+          "err",
+        );
+      } else {
+        showToast(String(e instanceof Error ? e.message : e), "err");
+      }
     } finally {
+      window.clearTimeout(t);
       setBusy(false);
     }
   };
@@ -345,12 +369,16 @@ export function App() {
                   </label>
                 ) : null}
 
+                <p className="mt-4 text-[11px] leading-relaxed text-muted/90">
+                  Mỗi mail cách nhau vài giây — nhiều người thì chờ lâu hơn,{" "}
+                  <strong className="text-ink-900">đừng đóng trang</strong> khi đang gửi.
+                </p>
                 <button
                   type="submit"
                   disabled={busy || !ready}
-                  className="mt-8 w-full rounded-2xl bg-gradient-to-r from-accent via-teal-300 to-accent2 py-4 text-base font-black text-ink-950 shadow-xl shadow-accent/20 transition hover:brightness-110 disabled:opacity-35"
+                  className="mt-3 w-full rounded-2xl bg-gradient-to-r from-accent via-teal-300 to-accent2 py-4 text-base font-black text-ink-950 shadow-xl shadow-accent/20 transition hover:brightness-110 disabled:opacity-35"
                 >
-                  {busy ? "Đang gửi…" : "Gửi email khảo sát"}
+                  {busy ? "Đang gửi (có thể vài phút)…" : "Gửi email khảo sát"}
                 </button>
               </form>
 

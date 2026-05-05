@@ -29,6 +29,8 @@ Railway inject vào process — khuyến nghị **không** phụ thuộc file `.
 
 `PORT` Railway tự gán — **đừng** đặt trùng tay.
 
+**Gửi nhiều mail:** mỗi mail có trễ `SEND_DELAY_MS` (mặc định 3,5s) — request `/api/send` có thể kéo dài **vài phút**. Nếu giao diện bị cắt giữa chừng, kiểm tra **HTTP timeout** trên proxy / edge (Railway có thể giới hạn ~100s) — giải pháp: gửi từng đợt ít người (Tuỳ chọn nâng cao → giới hạn N), hoặc tăng timeout nếu nền tảng cho phép.
+
 Tuỳ chọn ghi đè cổng nội bộ: `LISTEN_HOST=0.0.0.0` (mặc định đã là `0.0.0.0` khi có `PORT`).
 
 ### 3. Disk & dữ liệu
