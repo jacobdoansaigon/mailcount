@@ -25,7 +25,12 @@ import type { ReplyRecord } from "../lib/types.js";
 import { decryptSecret, encryptSecret } from "../lib/secret-crypto.js";
 import { RecipientModel } from "../models/Recipient.js";
 import { UserModel } from "../models/User.js";
-import { PRESET_MICROSOFT_365 } from "../lib/mail-presets.js";
+import {
+  PRESET_MICROSOFT_365,
+  resolveMicrosoft365SmtpHost,
+  resolveMicrosoft365SmtpPort,
+  resolveMicrosoft365SmtpSecureForPort,
+} from "../lib/mail-presets.js";
 import {
   formatMicrosoftSmtpError,
   verifyMicrosoft365Smtp,
@@ -281,9 +286,10 @@ export function registerMongoMultiuserApi(
       user.mailbox = user.mailbox ?? {};
       user.mailbox.smtpUser = workEmail;
       user.mailbox.smtpPassEnc = passEnc;
-      user.mailbox.smtpHost = PRESET_MICROSOFT_365.smtpHost;
-      user.mailbox.smtpPort = PRESET_MICROSOFT_365.smtpPort;
-      user.mailbox.smtpSecure = PRESET_MICROSOFT_365.smtpSecure;
+      const smtpP = resolveMicrosoft365SmtpPort(null);
+      user.mailbox.smtpHost = resolveMicrosoft365SmtpHost(null);
+      user.mailbox.smtpPort = smtpP;
+      user.mailbox.smtpSecure = resolveMicrosoft365SmtpSecureForPort(smtpP, null);
       user.mailbox.imapHost = PRESET_MICROSOFT_365.imapHost;
       user.mailbox.imapPort = PRESET_MICROSOFT_365.imapPort;
       user.mailbox.imapTls = PRESET_MICROSOFT_365.imapTls;
@@ -612,9 +618,10 @@ export function registerMongoMultiuserApi(
       user.mailbox = user.mailbox ?? {};
       user.mailbox.smtpUser = email;
       user.mailbox.smtpPassEnc = passEnc;
-      user.mailbox.smtpHost = PRESET_MICROSOFT_365.smtpHost;
-      user.mailbox.smtpPort = PRESET_MICROSOFT_365.smtpPort;
-      user.mailbox.smtpSecure = PRESET_MICROSOFT_365.smtpSecure;
+      const smtpP = resolveMicrosoft365SmtpPort(null);
+      user.mailbox.smtpHost = resolveMicrosoft365SmtpHost(null);
+      user.mailbox.smtpPort = smtpP;
+      user.mailbox.smtpSecure = resolveMicrosoft365SmtpSecureForPort(smtpP, null);
       user.mailbox.imapHost = PRESET_MICROSOFT_365.imapHost;
       user.mailbox.imapPort = PRESET_MICROSOFT_365.imapPort;
       user.mailbox.imapTls = PRESET_MICROSOFT_365.imapTls;

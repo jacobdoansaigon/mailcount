@@ -7,6 +7,8 @@ import {
   PRESET_MICROSOFT_365,
   resolveMicrosoft365ImapHost,
   resolveMicrosoft365SmtpHost,
+  resolveMicrosoft365SmtpPort,
+  resolveMicrosoft365SmtpSecureForPort,
 } from "../lib/mail-presets.js";
 import { UserModel } from "../models/User.js";
 
@@ -42,9 +44,11 @@ export async function getUserMailConfig(userId: string): Promise<MailConfig> {
   await fs.mkdir(path.dirname(p.outboundLogPath), { recursive: true });
 
   const smtpHost = resolveMicrosoft365SmtpHost(u.mailbox.smtpHost);
-  const smtpPort = u.mailbox.smtpPort || PRESET_MICROSOFT_365.smtpPort;
-  const smtpSecure =
-    u.mailbox.smtpSecure ?? PRESET_MICROSOFT_365.smtpSecure;
+  const smtpPort = resolveMicrosoft365SmtpPort(u.mailbox.smtpPort ?? null);
+  const smtpSecure = resolveMicrosoft365SmtpSecureForPort(
+    smtpPort,
+    u.mailbox.smtpSecure ?? null,
+  );
   const imapHost = resolveMicrosoft365ImapHost(u.mailbox.imapHost);
   const imapPort = u.mailbox.imapPort || PRESET_MICROSOFT_365.imapPort;
   const imapTls = u.mailbox.imapTls ?? PRESET_MICROSOFT_365.imapTls;

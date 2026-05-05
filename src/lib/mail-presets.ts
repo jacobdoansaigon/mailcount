@@ -39,6 +39,47 @@ export function resolveMicrosoft365ImapHost(
   return PRESET_MICROSOFT_365.imapHost;
 }
 
+/** Ưu tiên env — một số mạng chặn 587 nhưng cho 465 SSL. */
+export function resolveMicrosoft365SmtpPort(
+  userPort?: number | null,
+): number {
+  const raw = process.env["MICROSOFT365_SMTP_PORT"]?.trim();
+  if (raw) {
+    const n = parseInt(raw, 10);
+    if (Number.isFinite(n) && n > 0 && n < 65536) return n;
+  }
+  if (userPort != null && Number.isFinite(userPort) && userPort > 0) {
+    return userPort;
+  }
+  return PRESET_MICROSOFT_365.smtpPort;
+}
+
+/**
+ * `MICROSOFT365_SMTP_SECURE` ưu tiên; cổng 465 → implicit TLS;
+ * không thì dùng giá trị user / preset.
+ */
+export function resolveMicrosoft365SmtpSecureForPort(
+  port: number,
+  userSecure?: boolean | null,
+): boolean {
+  const v = process.env["MICROSOFT365_SMTP_SECURE"]?.trim().toLowerCase();
+  if (v === "true" || v === "1" || v === "yes") return true;
+  if (v === "false" || v === "0" || v === "no") return false;
+  if (port === 465) return true;
+  if (userSecure === true || userSecure === false) return userSecure;
+  return PRESET_MICROSOFT_365.smtpSecure;
+}
+
+/** Timeout TCP + greeting (ms), mặc định 35s — Railway tới Microsoft đôi khi chậm. */
+export function microsoft365SmtpConnectTimeoutMs(): number {
+  const raw = process.env["MICROSOFT365_SMTP_CONNECT_TIMEOUT_MS"]?.trim();
+  if (raw) {
+    const n = parseInt(raw, 10);
+    if (Number.isFinite(n) && n >= 8_000 && n <= 120_000) return n;
+  }
+  return 35_000;
+}
+
 export type WorkAccountEnvUpdates = Record<string, string | null | undefined>;
 
 /** Ghi đè .env với preset M365 + mailbox công việc; IMAP dùng chung SMTP_USER / SMTP_PASS */

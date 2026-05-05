@@ -1,10 +1,10 @@
 import nodemailer from "nodemailer";
 import {
-  PRESET_MICROSOFT_365,
+  microsoft365SmtpConnectTimeoutMs,
   resolveMicrosoft365SmtpHost,
+  resolveMicrosoft365SmtpPort,
+  resolveMicrosoft365SmtpSecureForPort,
 } from "./mail-presets.js";
-
-const VERIFY_DEADLINE_MS = 40_000;
 
 /**
  * Kiểm tra email + mật khẩu mailbox với **smtp.office365.com** (Microsoft client submission),
@@ -20,16 +20,20 @@ export async function verifyMicrosoft365Smtp(params: {
     throw new Error("Thiếu email hoặc mật khẩu mailbox để kiểm tra với Microsoft.");
   }
 
-  const p = PRESET_MICROSOFT_365;
   const host = resolveMicrosoft365SmtpHost(null);
+  const port = resolveMicrosoft365SmtpPort(null);
+  const secure = resolveMicrosoft365SmtpSecureForPort(port, null);
+  const connMs = microsoft365SmtpConnectTimeoutMs();
+  const verifyDeadlineMs = Math.min(95_000, Math.max(45_000, connMs * 2 + 10_000));
+
   const transporter = nodemailer.createTransport({
     host,
-    port: p.smtpPort,
-    secure: p.smtpSecure,
-    requireTLS: !p.smtpSecure && p.smtpPort === 587,
-    connectionTimeout: 20_000,
-    greetingTimeout: 20_000,
-    socketTimeout: 35_000,
+    port,
+    secure,
+    requireTLS: !secure && port === 587,
+    connectionTimeout: connMs,
+    greetingTimeout: connMs,
+    socketTimeout: connMs + 25_000,
     auth: { user, pass },
     tls: {
       minVersion: "TLSv1.2" as const,
@@ -43,10 +47,10 @@ export async function verifyMicrosoft365Smtp(params: {
       () =>
         rej(
           new Error(
-            `TIMEOUT: Không nhận phản hồi từ ${host} trong 40 giây (mạng / firewall / IPv6).`,
+            `TIMEOUT: Không nhận phản hồi từ ${host}:${port} trong ${Math.round(verifyDeadlineMs / 1000)}s (firewall / cổng bị chặn?).`,
           ),
         ),
-      VERIFY_DEADLINE_MS,
+      verifyDeadlineMs,
     );
   });
 
@@ -111,8 +115,10 @@ export function formatMicrosoftSmtpError(raw: string): string {
   ) {
     return (
       `${tag}Không kết nối được tới máy chủ SMTP (${raw.slice(0, 200)}). ` +
-      "Thử: (1) app đã ưu tiên IPv4 khi chạy trên Railway; (2) biến MICROSOFT365_SMTP_HOST=smtp-mail.outlook.com nếu là tài khoản Outlook cá nhân; " +
-      "(3) kiểm tra firewall / DNS từ datacenter."
+      "Trên Railway thử lần lượt: (1) MICROSOFT365_SMTP_PORT=465 và MICROSOFT365_SMTP_SECURE=true nếu cổng 587 bị chặn; " +
+      "(2) MICROSOFT365_SMTP_HOST=smtp-mail.outlook.com cho Outlook cá nhân; " +
+      "(3) MICROSOFT365_SMTP_CONNECT_TIMEOUT_MS=60000 nếu mạng chậm; " +
+      "(4) admin Microsoft / firewall datacenter."
     );
   }
   if (

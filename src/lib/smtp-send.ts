@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
+import { microsoft365SmtpConnectTimeoutMs } from "./mail-presets.js";
 import type { OutboundRecord } from "./types.js";
 import { appendOutboundRecord } from "./outbound-log.js";
 
@@ -111,14 +112,18 @@ export async function sendOneMail(opts: SendMailInput): Promise<OutboundRecord> 
   }));
 
   /** Microsoft 365: From/To dạng địa chỉ thuần — tránh 550/5.7.x do header display name lạ. */
+  const hostLow = opts.smtpHost.toLowerCase();
+  const isMs365 =
+    hostLow.includes("office365") || hostLow.includes("outlook");
+  const connMs = isMs365 ? microsoft365SmtpConnectTimeoutMs() : 20_000;
   const transporter = nodemailer.createTransport({
     host: opts.smtpHost,
     port: opts.smtpPort,
     secure: opts.smtpSecure,
     requireTLS: !opts.smtpSecure && opts.smtpPort === 587,
-    connectionTimeout: 20_000,
-    greetingTimeout: 20_000,
-    socketTimeout: 55_000,
+    connectionTimeout: connMs,
+    greetingTimeout: connMs,
+    socketTimeout: connMs + 30_000,
     auth: {
       user: opts.smtpUser,
       pass: opts.smtpPass,
