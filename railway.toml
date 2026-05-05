@@ -3,7 +3,9 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "npm start"
+# Gọi Node trực tiếp — tránh npm bọc ngoài (log SIGTERM dễ hiểu hơn)
+startCommand = "NODE_ENV=production node dist/server/index.js"
 healthcheckPath = "/api/health"
-healthcheckTimeout = 45
+# Mongo + cold start: tránh SIGTERM khi healthcheck quá sớm
+healthcheckTimeout = 90
 restartPolicyType = "ON_FAILURE"
