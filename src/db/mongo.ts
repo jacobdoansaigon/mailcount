@@ -15,7 +15,16 @@ export async function connectMongoDb(): Promise<void> {
   const uri = mongoConnectionUri();
   if (!uri) throw new Error("Thiếu MONGODB_URI hoặc MONGO_URL.");
   mongoose.set("strictQuery", true);
-  await mongoose.connect(uri);
+  /**
+   * Giới hạn thời gian chọn server — tránh treo vô hạn trước `app.listen`.
+   * Nếu không có timeout, Railway healthcheck (45s) hết hạn → gửi SIGTERM,
+   * npm in ra `signal SIGTERM` dù lỗi gốc là không kết nối được Mongo.
+   */
+  await mongoose.connect(uri, {
+    serverSelectionTimeoutMS: 15_000,
+    connectTimeoutMS: 15_000,
+    socketTimeoutMS: 45_000,
+  });
 }
 
 export async function disconnectMongoDb(): Promise<void> {
