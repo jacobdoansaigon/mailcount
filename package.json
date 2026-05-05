@@ -10,10 +10,12 @@
     "api": "tsx src/server/index.ts",
     "dev:web": "vite --config web/vite.config.ts",
     "dev:ui": "concurrently -k \"npm run api\" \"npm run dev:web\"",
+    "build:backend": "tsc",
     "build:web": "vite build --config web/vite.config.ts",
-    "build:all": "npm run build && npm run build:web",
+    "build": "npm run build:backend && npm run build:web",
+    "build:all": "npm run build",
+    "start": "NODE_ENV=production node dist/server/index.js",
     "start:ui": "NODE_ENV=production tsx src/server/index.ts",
-    "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
   "engines": {

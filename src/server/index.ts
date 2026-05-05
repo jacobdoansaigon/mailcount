@@ -33,7 +33,11 @@ const RECIPIENTS_SAVED_PATH = path.join(
   "campaign-recipients.csv",
 );
 const WEB_DIST = path.join(process.cwd(), "web", "dist");
-const PORT = Number(process.env["UI_PORT"] ?? 3781);
+/** Railway & nhiều PaaS đặt PORT; local dev dùng UI_PORT */
+const PORT = Number(process.env["PORT"] ?? process.env["UI_PORT"] ?? "3781");
+/** Public cloud cần 0.0.0.0; local mặc định 127.0.0.1 (trừ khi PORT đã set = PaaS) */
+const LISTEN_HOST =
+  process.env["LISTEN_HOST"] ?? (process.env["PORT"] ? "0.0.0.0" : "127.0.0.1");
 
 function maskEmail(addr: string): string {
   const s = addr.trim();
@@ -513,14 +517,15 @@ async function bootstrap(): Promise<void> {
   }
 
   await new Promise<void>((resolve) => {
-    app.listen(PORT, "127.0.0.1", () => {
+    app.listen(PORT, LISTEN_HOST, () => {
       resolve();
       const mode =
         process.env["NODE_ENV"] === "production"
           ? "production"
           : "development";
+      const publicUrl = process.env["RAILWAY_PUBLIC_DOMAIN"];
       console.error(
-        `[mail-count] API ${mode}: http://127.0.0.1:${PORT}   (development: UI Vite 5173 → proxy /api)`,
+        `[mail-count] ${mode} listening ${LISTEN_HOST}:${PORT}${publicUrl ? `  public https://${publicUrl}` : ""}`,
       );
     });
   });

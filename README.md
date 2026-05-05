@@ -33,16 +33,22 @@ npm run dev:ui
 - Form **gửi chiến dịch**: upload CSV + file đính kèm (gộp với `data/attachments/`), dry-run, giới hạn người nhận, delay tùy chỉnh.
 - **Poll Inbox**, **tải report.csv**, bảng lọc outbound / phản hồi.
 
-Production (một cổng — API + asset tĩnh):
+Production (một cổng — API + asset tĩnh, trên máy anh):
 
 ```bash
-npm run build:all
-NODE_ENV=production npm run start:ui
+npm run build
+NODE_ENV=production npm start
 ```
 
-API mặc định chỉ lắng nghe **`127.0.0.1`**. Đổi cổng: `UI_PORT`.
+(Trên **Railway**: Nixpacks chạy `npm run build` và `npm start` — xem [`docs/RAILWAY.md`](docs/RAILWAY.md).)
+
+Dev local API mặc định **`127.0.0.1`** + cổng `UI_PORT` hoặc `3781`. Khi có biến **`PORT`** (Railway), server lắng nghe **`0.0.0.0`**.
 
 Khung **Setup tài khoản** và **Lưu CSV danh sách** nằm phía trên trang; cấu hình ghi vào file **`.env`** trên máy (không đồng bộ cloud).
+
+## Deploy Railway
+
+Chi tiết biến môi trường và CLI: [`docs/RAILWAY.md`](docs/RAILWAY.md).
 
 ## Đẩy lên GitHub
 
@@ -87,7 +93,8 @@ npm run export -- --out ./data/report.csv
 
 ```bash
 npm run typecheck
-npm run build           # backend → dist/
-npm run build:web       # UI → web/dist/
-npm run build:all       # cả hai
+npm run build           # backend dist/ + web/dist/
+npm run build:web       # chỉ Vite UI
+npm run build:all       # alias của npm run build
+npm start               # production (sau npm run build)
 ```

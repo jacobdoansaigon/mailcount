@@ -1,0 +1,9 @@
+# https://docs.railway.com/guides/config-as-code
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 45
+restartPolicyType = "ON_FAILURE"
