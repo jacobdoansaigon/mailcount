@@ -17,7 +17,8 @@
     "start": "NODE_ENV=production node dist/server/index.js",
     "start:ui": "NODE_ENV=production tsx src/server/index.ts",
     "typecheck": "tsc --noEmit",
-    "seed:users": "tsx src/cli/seed-users.ts"
+    "seed:users": "tsx src/cli/seed-users.ts",
+    "seed:users:prod": "node dist/cli/seed-users.js"
   },
   "engines": {
     "node": ">=20"
