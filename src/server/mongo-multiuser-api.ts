@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import type { Express, NextFunction, Request, Response } from "express";
 import type multer from "multer";
 
@@ -7,16 +6,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import mongoose from "mongoose";
 import cookieParser from "cookie-parser";
-import { nanoid } from "nanoid";
 import { parse } from "csv-parse/sync";
-import { sendMagicLinkEmail } from "../auth/magic-mail.js";
 import {
   SESSION_COOKIE_NAME,
   signSessionToken,
   verifySessionToken,
   getJwtSecret,
 } from "../auth/session-jwt.js";
-import { isMagicLinkMailConfigured } from "../config.js";
+import { hashLoginPassword, verifyLoginPassword } from "../auth/password.js";
 import { buildDashboardPayload } from "../lib/dashboard-stats.js";
 import { collectAttachmentPaths } from "../lib/csv-recipients.js";
 import { pollRepliesToFolder } from "../lib/imap-poll.js";
@@ -26,7 +23,6 @@ import { buildReportRows, generateReportCsv } from "../lib/report.js";
 import { runSendCampaign } from "../lib/run-campaign.js";
 import type { ReplyRecord } from "../lib/types.js";
 import { encryptSecret } from "../lib/secret-crypto.js";
-import { MagicLinkTokenModel } from "../models/MagicLinkToken.js";
 import { RecipientModel } from "../models/Recipient.js";
 import { UserModel } from "../models/User.js";
 import { PRESET_MICROSOFT_365 } from "../lib/mail-presets.js";
@@ -67,9 +63,6 @@ function publicAppBase(): string {
   return b.replace(/\/$/, "");
 }
 
-const magicLastByEmail = new Map<string, number>();
-const MAGIC_COOLDOWN_MS = 45_000;
-
 function requireUser(req: Request, res: Response, next: NextFunction): void {
   const token = (req as Request & { cookies?: Record<string, string> }).cookies?.[
     SESSION_COOKIE_NAME
@@ -82,10 +75,6 @@ function requireUser(req: Request, res: Response, next: NextFunction): void {
   (req as AuthedRequest).userId = s.sub;
   (req as AuthedRequest).userEmail = s.email;
   next();
-}
-
-function sha256(s: string): string {
-  return crypto.createHash("sha256").update(s).digest("hex");
 }
 
 function escapeCell(v: string): string {
@@ -135,95 +124,56 @@ export function registerMongoMultiuserApi(
       ok: true,
       multiUser: true,
       publicUrl: publicAppBase(),
-      systemMailConfigured: isMagicLinkMailConfigured(),
+      authMode: "password",
     });
   });
 
-  app.post("/api/auth/magic-link", async (req, res) => {
+  function setSessionCookie(res: Response, userId: string, email: string): void {
+    const jwt = signSessionToken({ sub: userId, email });
+    const maxAge = 30 * 24 * 3600 * 1000;
+    const secure = process.env["NODE_ENV"] === "production";
+    res.cookie(SESSION_COOKIE_NAME, jwt, {
+      httpOnly: true,
+      secure,
+      sameSite: "lax",
+      maxAge,
+      path: "/",
+    });
+  }
+
+  app.post("/api/auth/login", async (req, res) => {
     try {
-      if (!isMagicLinkMailConfigured()) {
-        res.status(503).json({
-          ok: false,
-          error:
-            "Server chưa cấu hình gửi magic link. Admin đặt RESEND_API_KEY (+ RESEND_FROM) hoặc SMTP_USER và SMTP_PASS trên server.",
-        });
-        return;
-      }
       const email = nz((req.body as { email?: string })?.email).toLowerCase();
+      const password =
+        typeof (req.body as { password?: string })?.password === "string"
+          ? (req.body as { password: string }).password
+          : "";
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         res.status(400).json({ ok: false, error: "Email không hợp lệ." });
         return;
       }
-      const now = Date.now();
-      const last = magicLastByEmail.get(email) ?? 0;
-      if (now - last < MAGIC_COOLDOWN_MS) {
-        res.status(429).json({ ok: false, error: "Thử lại sau vài chục giây." });
+      if (!password) {
+        res.status(400).json({ ok: false, error: "Nhập mật khẩu." });
         return;
       }
-      magicLastByEmail.set(email, now);
-
-      const raw = nanoid(48);
-      const tokenHash = sha256(raw);
-      await MagicLinkTokenModel.create({
-        email,
-        tokenHash,
-        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-        used: false,
-      });
-
-      const link = `${publicAppBase()}/api/auth/verify?token=${encodeURIComponent(raw)}`;
-      await sendMagicLinkEmail(email, link);
-
-      res.json({ ok: true, message: "Đã gửi liên kết tới email của anh/chị." });
+      const user = await UserModel.findOne({ email }).select("+passwordHash");
+      const hash = (user as { passwordHash?: string } | null)?.passwordHash;
+      if (!user || !hash?.trim()) {
+        res.status(401).json({ ok: false, error: "Sai email hoặc mật khẩu." });
+        return;
+      }
+      const match = await verifyLoginPassword(password, hash);
+      if (!match) {
+        res.status(401).json({ ok: false, error: "Sai email hoặc mật khẩu." });
+        return;
+      }
+      setSessionCookie(res, user._id.toString(), user.email);
+      res.json({ ok: true });
     } catch (e) {
       res.status(500).json({
         ok: false,
         error: String(e instanceof Error ? e.message : e),
       });
-    }
-  });
-
-  app.get("/api/auth/verify", async (req, res) => {
-    try {
-      const token = nz(req.query["token"] as string);
-      if (!token) {
-        res.status(400).send("Thiếu token.");
-        return;
-      }
-      const tokenHash = sha256(token);
-      const doc = await MagicLinkTokenModel.findOne({
-        tokenHash,
-        used: false,
-        expiresAt: { $gt: new Date() },
-      });
-      if (!doc) {
-        res.status(400).send("Liên kết không hợp lệ hoặc đã hết hạn.");
-        return;
-      }
-      doc.used = true;
-      await doc.save();
-
-      let user = await UserModel.findOne({ email: doc.email });
-      if (!user) {
-        user = await UserModel.create({ email: doc.email });
-      }
-
-      const jwt = signSessionToken({
-        sub: user._id.toString(),
-        email: user.email,
-      });
-      const maxAge = 30 * 24 * 3600 * 1000;
-      const secure = process.env["NODE_ENV"] === "production";
-      res.cookie(SESSION_COOKIE_NAME, jwt, {
-        httpOnly: true,
-        secure,
-        sameSite: "lax",
-        maxAge,
-        path: "/",
-      });
-      res.redirect(302, `${publicAppBase()}/`);
-    } catch (e) {
-      res.status(500).send(String(e instanceof Error ? e.message : e));
     }
   });
 
@@ -300,6 +250,55 @@ export function registerMongoMultiuserApi(
         mailboxConfigured: true,
         emailMasked: maskEmail(workEmail),
       });
+    } catch (e) {
+      res.status(500).json({
+        ok: false,
+        error: String(e instanceof Error ? e.message : e),
+      });
+    }
+  });
+
+  app.post("/api/me/password", requireUser, async (req, res) => {
+    try {
+      const uid = (req as AuthedRequest).userId;
+      const b = req.body as Record<string, unknown>;
+      const current = nz(b.currentPassword);
+      const next = nz(b.newPassword);
+      if (next.length < 8) {
+        res.status(400).json({
+          ok: false,
+          error: "Mật khẩu mới cần ít nhất 8 ký tự.",
+        });
+        return;
+      }
+      const user = await UserModel.findById(uid).select("+passwordHash");
+      if (!user) {
+        res.status(404).json({ ok: false, error: "User không tồn tại." });
+        return;
+      }
+      const existing = (
+        user as { passwordHash?: string }
+      ).passwordHash?.trim() ?? "";
+      if (existing.length) {
+        if (!current) {
+          res.status(400).json({
+            ok: false,
+            error: "Nhập mật khẩu hiện tại.",
+          });
+          return;
+        }
+        const okCur = await verifyLoginPassword(current, existing);
+        if (!okCur) {
+          res.status(400).json({
+            ok: false,
+            error: "Mật khẩu hiện tại không đúng.",
+          });
+          return;
+        }
+      }
+      user.set("passwordHash", await hashLoginPassword(next));
+      await user.save();
+      res.json({ ok: true });
     } catch (e) {
       res.status(500).json({
         ok: false,

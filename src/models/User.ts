@@ -25,6 +25,12 @@ const UserSchema = new mongoose.Schema(
       index: true,
     },
     mailbox: { type: MailboxSchema, default: () => ({}) },
+    /** Mật khẩu đăng nhập web (bcrypt); không trả về mặc định — dùng `.select("+passwordHash")` khi cần. */
+    passwordHash: {
+      type: String,
+      default: "",
+      select: false,
+    },
     sendDelayMs: { type: Number, default: 3500 },
   },
   { timestamps: true },

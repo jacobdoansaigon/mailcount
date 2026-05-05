@@ -147,7 +147,7 @@ export function SimpleAccount(props: {
     return (
       <details className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#1a2233]/90 via-panel to-[#121a28] p-4 shadow-soft">
         <summary className="cursor-pointer list-none text-sm font-semibold text-muted marker:hidden [&::-webkit-details-marker]:hidden">
-          Mail gửi · {info?.configured ? "đã nối" : "cấu hình"}
+          Mail gửi khảo sát (Microsoft 365) · {info?.configured ? "đã nối" : "chưa cấu hình"}
         </summary>
         <div className="mt-3 border-t border-stroke/40 pt-3">{inner}</div>
       </details>

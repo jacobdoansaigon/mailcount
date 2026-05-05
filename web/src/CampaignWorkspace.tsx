@@ -6,6 +6,7 @@ import {
   type MailPreviewCtx,
 } from "./mailPreview";
 import { SimpleAccount } from "./SimpleAccount";
+import { ProfilePassword } from "./ProfilePassword";
 
 type RecRow = {
   email: string;
@@ -273,11 +274,17 @@ export function CampaignWorkspace(props: {
 
   return (
     <div className="flex flex-col gap-5 pb-24 sm:gap-6">
-      <SimpleAccount
-        onSaved={loadAll}
-        showToast={showToast}
-        variant="compact"
-      />
+      <div className="space-y-3">
+        <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-muted">
+          Hồ sơ
+        </h2>
+        <ProfilePassword showToast={showToast} variant="compact" />
+        <SimpleAccount
+          onSaved={loadAll}
+          showToast={showToast}
+          variant="compact"
+        />
+      </div>
 
       {/* 1 — Nội dung mail */}
       <section className="rounded-2xl border border-white/[0.08] bg-panel/90 p-4 shadow-soft sm:p-5">
