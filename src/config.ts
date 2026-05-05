@@ -5,12 +5,24 @@ import { PRESET_MICROSOFT_365 } from "./lib/mail-presets.js";
 
 export const ENV_FILE_PATH = path.resolve(process.cwd(), ".env");
 
-/** Gọi lại sau khi ghi .env từ UI */
+/**
+ * Đọc `.env` nhưng **không** ghi đè biến đã có (vd. SMTP_USER / SMTP_PASS do Railway inject).
+ * Tránh file `.env` mẫu hoặc dòng trống làm mất cấu hình trên PaaS.
+ */
 export function refreshEnvFromDisk(): void {
+  dotenv.config({ path: ENV_FILE_PATH, override: false });
+}
+
+/** Gọi ngay sau khi API ghi `.env` từ form — cần đọc lại giá trị mới từ file. */
+export function reloadEnvFromFileAfterSave(): void {
   dotenv.config({ path: ENV_FILE_PATH, override: true });
 }
 
 refreshEnvFromDisk();
+
+/** Thông báo thống nhất khi thiếu mailbox (UI + API + Railway). */
+export const ERR_MAILBOX_NOT_LINKED =
+  "Chưa kết nối email Microsoft 365: nhập email công ty và mật khẩu (hoặc mã ứng dụng) ở «Bước 1 · Kết nối email công việc» trên web. Trên Railway / server cloud: thêm Variables SMTP_USER và SMTP_PASS (máy chủ smtp.office365.com đã cấu hình sẵn trong app).";
 
 function opt(name: string, fallback: string): string {
   const v = process.env[name]?.trim();
@@ -82,9 +94,7 @@ export function getMailConfig(): MailConfig {
   const smtpUser = mail.smtpUser;
   const smtpPass = mail.smtpPass;
   if (!smtpUser || !smtpPass) {
-    throw new Error(
-      "Chưa cấu hình SMTP: tạo file .env hoặc dùng mục Setup trên web.",
-    );
+    throw new Error(ERR_MAILBOX_NOT_LINKED);
   }
   const p = getStoragePaths();
   return {
@@ -136,7 +146,6 @@ export function loadImapAuth(): { user: string; pass: string } {
     imapPass && imapPass.length > 0
       ? imapPass
       : opt("SMTP_PASS", "").trim();
-  if (!user) throw new Error("SMTP_USER hoặc IMAP_USER không được để trống");
-  if (!pass) throw new Error("SMTP_PASS hoặc IMAP_PASS không được để trống");
+  if (!user || !pass) throw new Error(ERR_MAILBOX_NOT_LINKED);
   return { user, pass };
 }

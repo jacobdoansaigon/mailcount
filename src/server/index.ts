@@ -14,6 +14,7 @@ import {
   isMailConfigComplete,
   loadImapAuth,
   refreshEnvFromDisk,
+  reloadEnvFromFileAfterSave,
 } from "../config.js";
 import { collectAttachmentPaths, loadRecipientsCsv } from "../lib/csv-recipients.js";
 import { upsertManualSavedRecipient } from "../lib/saved-recipients-csv.js";
@@ -152,7 +153,7 @@ async function bootstrap(): Promise<void> {
         { sendDelayMs },
       );
       await mergeIntoEnvFile(ENV_FILE_PATH, updates);
-      refreshEnvFromDisk();
+      reloadEnvFromFileAfterSave();
       res.json({
         ok: true,
         configured: isMailConfigComplete(),
@@ -246,7 +247,7 @@ async function bootstrap(): Promise<void> {
       }
 
       await mergeIntoEnvFile(ENV_FILE_PATH, updates);
-      refreshEnvFromDisk();
+      reloadEnvFromFileAfterSave();
 
       res.json({ ok: true, configured: isMailConfigComplete() });
     } catch (e) {
@@ -507,7 +508,11 @@ async function bootstrap(): Promise<void> {
       });
     } catch (e) {
       const msg = String(e instanceof Error ? e.message : e);
-      const code = msg.includes("Chưa cấu hình SMTP") ? 400 : 500;
+      const code =
+        msg.includes("Chưa kết nối email Microsoft") ||
+        msg.includes("Chưa cấu hình SMTP")
+          ? 400
+          : 500;
       res.status(code).json({ ok: false, error: msg });
     }
   });
@@ -635,7 +640,11 @@ async function bootstrap(): Promise<void> {
         });
       } catch (e) {
         const msg = String(e instanceof Error ? e.message : e);
-        const code = msg.includes("Chưa cấu hình SMTP") ? 400 : 500;
+        const code =
+          msg.includes("Chưa kết nối email Microsoft") ||
+          msg.includes("Chưa cấu hình SMTP")
+            ? 400
+            : 500;
         res.status(code).json({ ok: false, error: msg });
       }
     },
