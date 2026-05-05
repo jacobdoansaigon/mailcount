@@ -16,6 +16,7 @@ import {
   refreshEnvFromDisk,
 } from "../config.js";
 import { collectAttachmentPaths, loadRecipientsCsv } from "../lib/csv-recipients.js";
+import { upsertManualSavedRecipient } from "../lib/saved-recipients-csv.js";
 import { buildDashboardPayload } from "../lib/dashboard-stats.js";
 import { readEnvFile, mergeIntoEnvFile } from "../lib/env-file.js";
 import {
@@ -282,6 +283,33 @@ async function bootstrap(): Promise<void> {
         ok: false,
         error: String(e instanceof Error ? e.message : e),
       });
+    }
+  });
+
+  /** Thêm / sửa một người trong danh sách đã lưu (nhập tay) */
+  app.post("/api/recipients/manual", async (req, res) => {
+    try {
+      const b = req.body as Record<string, unknown>;
+      const email = nz(b.email);
+      const name = nz(b.name);
+      const greeting = nz(b.greeting);
+      if (!email) {
+        res.status(400).json({ ok: false, error: "Vui lòng nhập email." });
+        return;
+      }
+      const rows = await upsertManualSavedRecipient(RECIPIENTS_SAVED_PATH, {
+        email,
+        name: name || undefined,
+        greeting: greeting || undefined,
+      });
+      res.json({
+        ok: true,
+        rowCount: rows.length,
+        path: RECIPIENTS_SAVED_PATH,
+      });
+    } catch (e) {
+      const msg = String(e instanceof Error ? e.message : e);
+      res.status(400).json({ ok: false, error: msg });
     }
   });
 

@@ -29,7 +29,7 @@ npm run dev:ui
 ```
 
 - **Bước 1:** chỉ **email công việc + mật khẩu** (Microsoft 365) — máy chủ SMTP/IMAP đã cấu hình sẵn trong code.
-- **Bước 2:** tải **CSV danh sách** (cột `email`, tuỳ chọn `greeting` để xưng hô).
+- **Bước 2:** nhập tay **email + tên + xưng hô** từng người, hoặc tải **CSV** (cột `email`, tuỳ chọn `greeting`).
 - **Gửi & thu:** tiêu đề, nội dung, đính kèm, gửi mail, **kiểm tra hộp thư**, bảng đã gửi / phản hồi, tải báo cáo CSV.
 - Tab **Số liệu:** tỷ lệ phản hồi, biểu đồ 14 ngày, cách ghép mail (message-id / subject-code / …).
 

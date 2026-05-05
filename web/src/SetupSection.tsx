@@ -17,6 +17,10 @@ export function SavedRecipientsBlock(props: {
 }) {
   const { onSaved, showToast } = props;
   const [busySubmit, setBusySubmit] = useState(false);
+  const [busyManual, setBusyManual] = useState(false);
+  const [manualEmail, setManualEmail] = useState("");
+  const [manualName, setManualName] = useState("");
+  const [manualGreeting, setManualGreeting] = useState("");
   const [info, setInfo] = useState<{
     exists: boolean;
     path: string;
@@ -43,7 +47,33 @@ export function SavedRecipientsBlock(props: {
     void load();
   }, [load]);
 
-  const onSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
+  const onManualAdd = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setBusyManual(true);
+    try {
+      const r = await fj<{ ok: boolean; rowCount: number }>("/api/recipients/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: manualEmail.trim(),
+          name: manualName.trim(),
+          greeting: manualGreeting.trim(),
+        }),
+      });
+      showToast(`Đã thêm · còn ${r.rowCount} người trong danh sách.`, "ok");
+      setManualEmail("");
+      setManualName("");
+      setManualGreeting("");
+      await load();
+      void onSaved();
+    } catch (e) {
+      showToast(String(e instanceof Error ? e.message : e), "err");
+    } finally {
+      setBusyManual(false);
+    }
+  };
+
+  const onSubmitFile = async (ev: React.FormEvent<HTMLFormElement>) => {
     ev.preventDefault();
     const fd = new FormData(ev.currentTarget);
     setBusySubmit(true);
@@ -69,9 +99,9 @@ export function SavedRecipientsBlock(props: {
       </p>
       <h2 className="font-display mt-2 text-xl font-bold text-white">Danh sách người nhận</h2>
       <p className="mt-2 text-sm leading-relaxed text-muted">
-        Tải file Excel/CSV đã xuất ra — cần cột <strong className="text-ink-900">email</strong>. Cột{" "}
-        <strong className="text-ink-900">greeting</strong> (vd: Anh Minh, Chị Lan) để mỗi mail xưng
-        hô đúng người.
+        Thêm từng người bên dưới, <strong className="text-ink-900">hoặc</strong> tải file Excel/CSV (cột{" "}
+        <strong className="text-ink-900">email</strong>, tuỳ chọn <strong className="text-ink-900">greeting</strong>{" "}
+        như Anh Minh, Chị Lan).
       </p>
       <div className="mt-4 flex flex-wrap items-baseline gap-3 rounded-2xl border border-stroke/80 bg-ink-950/45 px-4 py-3">
         <p className="text-3xl font-bold tabular-nums text-white">{info?.rowCount ?? 0}</p>
@@ -83,9 +113,70 @@ export function SavedRecipientsBlock(props: {
           </p>
         ) : null}
       </div>
-      <form className="mt-5 flex flex-wrap items-end gap-4" onSubmit={onSubmit}>
+
+      <form
+        onSubmit={onManualAdd}
+        className="mt-6 rounded-2xl border border-stroke/70 bg-ink-950/35 p-4 sm:p-5"
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide text-accent">
+          Nhập tay
+        </p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <label className="block sm:col-span-1">
+            <span className="text-xs font-medium text-muted">Email *</span>
+            <input
+              type="email"
+              value={manualEmail}
+              onChange={(e) => setManualEmail(e.target.value)}
+              required
+              placeholder="ten@congty.com"
+              className="mt-1.5 w-full rounded-xl border border-stroke bg-ink-950/80 px-3 py-2.5 text-sm text-white outline-none focus:border-accent2/50"
+            />
+          </label>
+          <label className="block sm:col-span-1">
+            <span className="text-xs font-medium text-muted">Tên (tuỳ chọn)</span>
+            <input
+              type="text"
+              value={manualName}
+              onChange={(e) => setManualName(e.target.value)}
+              placeholder="Nguyễn Văn A"
+              className="mt-1.5 w-full rounded-xl border border-stroke bg-ink-950/80 px-3 py-2.5 text-sm text-white outline-none focus:border-accent2/50"
+            />
+          </label>
+          <label className="block sm:col-span-1">
+            <span className="text-xs font-medium text-muted">Xưng hô (tuỳ chọn)</span>
+            <input
+              type="text"
+              value={manualGreeting}
+              onChange={(e) => setManualGreeting(e.target.value)}
+              placeholder="Anh Minh, Chị Lan…"
+              className="mt-1.5 w-full rounded-xl border border-stroke bg-ink-950/80 px-3 py-2.5 text-sm text-white outline-none focus:border-accent2/50"
+            />
+          </label>
+        </div>
+        <p className="mt-2 text-[11px] text-muted/90">
+          Trùng email sẽ <strong className="text-ink-900">cập nhật</strong> tên / xưng hô; mã khảo sát cũ (nếu có) được giữ.
+        </p>
+        <button
+          type="submit"
+          disabled={busyManual}
+          className="mt-4 rounded-xl border border-accent/40 bg-accent/15 px-5 py-2.5 text-sm font-bold text-accent transition hover:bg-accent/25 disabled:opacity-40"
+        >
+          {busyManual ? "Đang thêm…" : "Thêm người này"}
+        </button>
+      </form>
+
+      <div className="my-6 flex items-center gap-3">
+        <div className="h-px flex-1 bg-stroke/80" />
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted">
+          hoặc file
+        </span>
+        <div className="h-px flex-1 bg-stroke/80" />
+      </div>
+
+      <form className="flex flex-wrap items-end gap-4" onSubmit={onSubmitFile}>
         <label className="text-sm text-muted">
-          <span className="mb-2 block font-medium text-ink-900">Chọn file</span>
+          <span className="mb-2 block font-medium text-ink-900">Chọn file CSV</span>
           <input
             name="csv"
             type="file"
@@ -99,7 +190,7 @@ export function SavedRecipientsBlock(props: {
           disabled={busySubmit}
           className="rounded-2xl border border-accent2/35 bg-accent2/15 px-6 py-3 text-sm font-bold text-accent2 transition hover:bg-accent2/25 disabled:opacity-40"
         >
-          {busySubmit ? "Đang lưu…" : "Lưu danh sách"}
+          {busySubmit ? "Đang lưu…" : "Thay bằng file này"}
         </button>
         <button
           type="button"
