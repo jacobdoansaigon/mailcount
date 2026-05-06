@@ -60,6 +60,26 @@ export function SimpleAccount(props: {
     }
   };
 
+  const diagTcpPorts = async () => {
+    setTesting(true);
+    try {
+      const d = await fj<{
+        ok: boolean;
+        host: string;
+        explain: string;
+        ipv4Tcp: { "587": { ok: boolean; error?: string }; "465": { ok: boolean; error?: string } };
+      }>("/api/me/mail-transport-diag");
+      const a = d.ipv4Tcp["587"].ok ? "587✓" : `587✗(${d.ipv4Tcp["587"].error ?? "?"})`;
+      const b = d.ipv4Tcp["465"].ok ? "465✓" : `465✗(${d.ipv4Tcp["465"].error ?? "?"})`;
+      const okish = d.ipv4Tcp["587"].ok || d.ipv4Tcp["465"].ok;
+      showToast(`${d.host}: ${a} · ${b}. ${d.explain}`, okish ? "ok" : "err");
+    } catch (e) {
+      showToast(String(e instanceof Error ? e.message : e), "err");
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const testMicrosoftSmtp = async () => {
     if (!info?.configured) {
       showToast("Anh chị lưu email + mật khẩu mailbox trước.", "err");
@@ -158,6 +178,18 @@ export function SimpleAccount(props: {
             }
           >
             {busy ? "…" : "Lưu"}
+          </button>
+          <button
+            type="button"
+            disabled={busy || testing}
+            onClick={() => void diagTcpPorts()}
+            className={
+              variant === "compact"
+                ? "rounded-xl border border-white/15 bg-ink-900/70 px-3 py-2 text-[11px] font-bold text-muted hover:text-ink-900 disabled:opacity-35"
+                : "rounded-2xl border border-white/15 bg-ink-900/70 px-5 py-3 text-xs font-bold text-muted hover:text-ink-900 disabled:opacity-35"
+            }
+          >
+            {testing ? "…" : "TCP 587/465"}
           </button>
           <button
             type="button"

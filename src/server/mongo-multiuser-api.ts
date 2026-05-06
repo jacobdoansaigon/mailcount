@@ -35,6 +35,7 @@ import {
   formatMicrosoftSmtpError,
   verifyMicrosoft365Smtp,
 } from "../lib/ms365-smtp-verify.js";
+import { probeTcpPort } from "../lib/tcp-smtp-probe.js";
 import {
   getUserMailConfig,
   userWorkspacePaths,
@@ -327,6 +328,50 @@ export function registerMongoMultiuserApi(
         ? msg
         : formatMicrosoftSmtpError(msg);
       res.status(400).json({ ok: false, error: friendly });
+    }
+  });
+
+  /** Chỉ thử TCP IPv4 tới SMTP host (587/465) — không cần mật khẩu; phân biệt firewall vs lỗi auth. */
+  app.get("/api/me/mail-transport-diag", requireUser, async (req, res) => {
+    try {
+      const uid = (req as AuthedRequest).userId;
+      const user = await UserModel.findById(uid).lean();
+      const host = resolveMicrosoft365SmtpHost(user?.mailbox?.smtpHost ?? null);
+      const tmo = 10_000;
+      const [p587, p465] = await Promise.all([
+        probeTcpPort(host, 587, tmo),
+        probeTcpPort(host, 465, tmo),
+      ]);
+      let explain: string;
+      if (!p587.ok && !p465.ok) {
+        explain =
+          "TCP tới cả 587 và 465 đều không mở được — thường do firewall/datacenter (Railway) chặn SMTP ra ngoài, hoặc Microsoft chặn IP. Cần admin mạng / Microsoft (connector) hoặc dịch vụ gửi qua HTTP API.";
+      } else if (!p587.ok && p465.ok) {
+        explain =
+          "Cổng 587 bị chặn nhưng 465 mở được — trên Railway đặt MICROSOFT365_SMTP_PORT=465 và MICROSOFT365_SMTP_SECURE=true rồi redeploy.";
+      } else if (p587.ok && !p465.ok) {
+        explain =
+          "587 mở được, 465 không — có thể dùng mặc định STARTTLS trên 587; nếu SMTP vẫn lỗi, xem tiếp bước TLS/auth.";
+      } else {
+        explain =
+          "Cả 587 và 465 đều mở TCP được — nếu «Thử SMTP» vẫn timeout thì lỗi thường ở TLS hoặc SMTP AUTH (không phải chặn cổng thô).";
+      }
+      res.json({
+        ok: true,
+        host,
+        ipv4Tcp: { "587": p587, "465": p465 },
+        envHints: {
+          MICROSOFT365_SMTP_PORT: process.env["MICROSOFT365_SMTP_PORT"] ?? null,
+          MICROSOFT365_SMTP_SECURE: process.env["MICROSOFT365_SMTP_SECURE"] ?? null,
+          MICROSOFT365_SMTP_HOST: process.env["MICROSOFT365_SMTP_HOST"] ?? null,
+        },
+        explain,
+      });
+    } catch (e) {
+      res.status(500).json({
+        ok: false,
+        error: String(e instanceof Error ? e.message : e),
+      });
     }
   });
 
